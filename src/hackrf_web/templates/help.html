@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}帮助 · HackRF Toolkit{% endblock %}
+{% block content %}
+<style>
+.doc-toc { position:sticky; top:1rem; font-size:.9rem; }
+.doc-toc a { display:block; padding:.2rem .6rem; color:#475569; text-decoration:none; border-left:2px solid transparent; }
+.doc-toc a:hover { color:#1e3a8a; border-left-color:#93c5fd; background:#f1f5f9; }
+.doc-sec { scroll-margin-top:1rem; }
+.doc-sec h5 { color:#1e3a8a; font-weight:600; border-bottom:2px solid #e2e8f0; padding-bottom:.4rem; margin-bottom:1rem; }
+.doc-sec h6 { color:#334155; font-weight:600; margin-top:1.1rem; }
+.doc-sec p, .doc-sec li { line-height:1.75; }
+.doc-sec code { background:#eef2f7; color:#b91c1c; padding:.05rem .35rem; border-radius:.25rem; font-size:.85em; }
+.kbd-freq { background:#0b0e14; color:#39d353; padding:.05rem .4rem; border-radius:.25rem; font-family:ui-monospace,monospace; }
+.callout { border-left:4px solid #38bdf8; background:#f0f9ff; padding:.6rem .9rem; border-radius:.3rem; }
+.callout.warn { border-left-color:#f59e0b; background:#fffbeb; }
+.callout.danger { border-left-color:#ef4444; background:#fef2f2; }
+html { scroll-behavior:smooth; }
+</style>
+
+<div class="d-flex align-items-baseline justify-content-between mb-3">
+  <h4 class="mb-0"><i class="bi bi-book text-primary"></i> 帮助 · SDR / 射频技术手册</h4>
+  <span class="small text-muted">面向本工具,也讲清背后的信号原理</span>
+</div>
+
+<div class="callout mb-3 small"><i class="bi bi-info-circle text-primary"></i>
+  各操作页参数旁的 <i class="bi bi-question-circle text-primary"></i> 蓝色问号都能点开即时说明。本页是系统性的原理手册。</div>
+
+<div class="row g-4">
+  <!-- TOC -->
+  <div class="col-lg-3 d-none d-lg-block">
+    <nav class="doc-toc">
+      <div class="text-muted small fw-bold mb-1 px-2">目录</div>
+      <a href="#s-radio">1. 无线电基础</a>
+      <a href="#s-sdr">2. SDR 与 IQ 采样</a>
+      <a href="#s-power">3. 功率、dBFS 与增益</a>
+      <a href="#s-read">4. 看懂频谱与峰值</a>
+      <a href="#s-hw">5. HackRF One 硬件</a>
+      <a href="#s-replay">6. 抓包与重放原理</a>
+      <a href="#s-gps">7. GPS 欺骗原理</a>
+      <a href="#s-cli">8. 命令行参考</a>
+      <a href="#s-safe">9. 安全与合规</a>
+      <a href="#s-quick">10. 快速上手</a>
+    </nav>
+  </div>
+
+  <div class="col-lg-9">
+
+    <section id="s-radio" class="doc-sec mb-4">
+      <h5>1. 无线电基础</h5>
+      <p><b>频率(Frequency)</b>是电磁波每秒振荡的次数,单位赫兹(Hz)。收音机"调台"就是选频率。频率与波长成反比:波长 λ(米)≈ 300 ÷ 频率(MHz)。例如 <span class="kbd-freq">433.92 MHz</span> 波长约 0.69 m,<span class="kbd-freq">2.4 GHz</span> 约 12.5 cm——这决定了天线尺寸。</p>
+      <h6>常见频段(ISM / 民用)</h6>
+      <table class="table table-sm">
+        <thead class="table-light"><tr><th>频段</th><th>典型用途</th></tr></thead>
+        <tbody>
+          <tr><td>315 MHz</td><td>北美车钥匙、胎压、车库门</td></tr>
+          <tr><td>433.92 MHz</td><td>欧亚车钥匙、遥控插座、气象站、门磁(最热闹的 ISM 段)</td></tr>
+          <tr><td>868 / 915 MHz</td><td>欧洲/美洲 ISM、LoRa、智能电表</td></tr>
+          <tr><td>1575.42 MHz</td><td>GPS L1 民用信号</td></tr>
+          <tr><td>2.4 GHz</td><td>WiFi、蓝牙 / BLE、ZigBee</td></tr>
+        </tbody>
+      </table>
+      <h6>调制(Modulation)—— 信息怎么"骑"在电波上</h6>
+      <ul class="mb-0">
+        <li><b>OOK / ASK</b>(通断 / 幅移键控):有载波=1、没载波=0。绝大多数便宜遥控器用它,波形像莫尔斯电码。</li>
+        <li><b>FSK / GFSK</b>(频移键控):用两个略不同的频率代表 0/1。抗噪比 OOK 好,蓝牙、许多车钥匙用它。</li>
+        <li><b>PSK / QAM</b>:用相位/幅度组合承载更多比特,WiFi、数字电视等高速链路用。</li>
+      </ul>
+    </section>
+
+    <section id="s-sdr" class="doc-sec mb-4">
+      <h5>2. SDR 与 IQ 采样</h5>
+      <p><b>软件定义无线电(SDR)</b>把传统电台里焊死的解调电路搬进软件:硬件只负责把天线信号搬到基带并数字化成一串数字,之后的滤波、解调、解码全由软件完成。所以同一台 HackRF 今天当遥控接收机、明天当频谱仪、后天当 GPS 发射机。</p>
+      <h6>IQ 数据</h6>
+      <p>SDR 用两路正交分量 <b>I(同相)</b>与 <b>Q(正交)</b>来完整描述一个信号的幅度与相位。可理解为把信号画在复平面上的坐标 (I, Q)。HackRF 每个采样输出一对 8-bit 有符号的 I、Q,交错存储:<code>I₀ Q₀ I₁ Q₁ …</code>,即每采样 2 字节。这就是录制的 <code>.raw</code> 文件内容。</p>
+      <h6>采样率与带宽</h6>
+      <p><b>采样率(Sample rate)</b>决定你一次能观测多宽的频谱。由奈奎斯特定理,采样率 <code>Fs</code> 能覆盖约 <code>Fs</code> 宽的带宽(复采样)。8 Msps ≈ 看 8 MHz 宽。<b>基带带宽</b>(<code>-b</code>)是硬件模拟滤波器宽度,一般设为略小于采样率以滤除带外噪声。</p>
+      <div class="callout small"><b>文件大小</b> = 采样率 × 2 字节 × 秒数。例:8 Msps 录 10 秒 = 8M×2×10 = <b>160 MB</b>。窄带信号(如钥匙)用 2 Msps 足矣,文件小 4 倍。</div>
+    </section>
+
+    <section id="s-power" class="doc-sec mb-4">
+      <h5>3. 功率、dBFS 与增益</h5>
+      <p><b>dBFS</b>(dB relative to Full Scale)是数字域的功率刻度:0 dBFS 是 ADC 满量程(最强),数值越负越弱。它是<b>相对值</b>,不是绝对功率(dBm)。</p>
+      <ul>
+        <li><b>底噪(Noise floor)</b>:没有目标信号时的背景能量水平,是判断"有没有信号"的基线。HackRF 典型底噪在 −25 ~ −40 dBFS 量级(随增益变化)。</li>
+        <li><b>动态范围</b>:最强信号与底噪之差。HackRF 是 8-bit ADC,理论动态范围约 48 dB,有限——所以要靠增益把目标信号推到合适电平。</li>
+      </ul>
+      <h6>三级增益(接收链路)</h6>
+      <table class="table table-sm">
+        <thead class="table-light"><tr><th>级</th><th>参数</th><th>范围</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td>RF Amp</td><td><code>-a</code></td><td>0/1(~+11 dB)</td><td>最前端总开关,信号极弱时开;强信号别开,易过载</td></tr>
+          <tr><td>LNA(IF)</td><td><code>-l</code></td><td>0–40,步进 8</td><td>低噪声放大,靠近天线,主要影响灵敏度</td></tr>
+          <tr><td>VGA(基带)</td><td><code>-g</code></td><td>0–62,步进 2</td><td>后级基带增益,把信号抬到 ADC 合适电平</td></tr>
+        </tbody>
+      </table>
+      <p class="mb-0">发射侧只有一级 <b>TX VGA</b>(<code>-x</code>,0–47)加可选 RF Amp。<b>调增益的目标</b>:目标信号明显高出底噪,但峰值不要顶到 0 dBFS(过载会失真、产生假信号)。</p>
+    </section>
+
+    <section id="s-read" class="doc-sec mb-4">
+      <h5>4. 看懂频谱与峰值</h5>
+      <p><b>实时频谱</b>:横轴频率、纵轴强度(dBFS),显示各频点此刻有多强。扫频是从低到高逐段扫过去的,那条<span style="color:#0aa">青色竖线</span>是当前扫描位置。</p>
+      <p><b>峰值保持(Peak Hold)</b>:叠加一条暗黄包络,记录每个频点<b>出现过的最强值</b>。间歇/突发信号(按一下钥匙)也会被定格,方便数清楚一共有几个信号、分别在哪个频点——这是找信号最实用的手段。</p>
+      <p><b>识别信号</b>:遥控器按下时,会在其载波频点出现一个明显高出底噪的窄峰;OOK 信号在时域上是断续的,所以峰值保持能抓到它;WiFi/蓝牙则是宽而杂的一片。</p>
+      <div class="callout small">配合本工具:选好频段 → 连续扫描 + 峰值保持 → 按下目标遥控 → 在峰值列表读出频点 → 点『抓包』直接带着这个频点去录制。</div>
+    </section>
+
+    <section id="s-hw" class="doc-sec mb-4">
+      <h5>5. HackRF One 硬件</h5>
+      <table class="table table-sm">
+        <tbody>
+          <tr><td style="width:130px">频率范围</td><td>1 MHz – 6 GHz</td></tr>
+          <tr><td>采样率</td><td>2 – 20 Msps(20 为上限,高采样率对 USB 要求高)</td></tr>
+          <tr><td>ADC/DAC</td><td>8-bit(动态范围有限,靠增益凑信噪比)</td></tr>
+          <tr><td>双工</td><td><b>半双工</b> —— 收发不能同时,同一时刻只能做一件事</td></tr>
+          <tr><td>时钟</td><td>板载晶振;频率会有几百 Hz~几 kHz 偏差,克隆板尤甚(影响 GPS 等对频偏敏感的场景)</td></tr>
+          <tr><td>天线口</td><td>可选偏置电源(<code>-p</code> bias-tee)给有源天线供电</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn small"><b>半双工的含义</b>:本工具因此强制"同一时刻只跑一个任务"——扫描时不能同时抓包,发射时不能同时接收。这是硬件决定的,不是软件限制。</div>
+    </section>
+
+    <section id="s-replay" class="doc-sec mb-4">
+      <h5>6. 抓包与重放原理</h5>
+      <p><b>重放攻击(Replay Attack)</b>:把目标发射的原始射频(IQ)完整录下来,之后原样再发射一遍,让接收方以为是"真"的指令。它不需要理解协议内容——是"照抄"而非"破解"。</p>
+      <h6>为什么固定码能成、滚动码常常不行</h6>
+      <ul>
+        <li><b>固定码</b>:每次按键发的码字都一样。录一次就能无限重放。老式车库门、便宜遥控插座、部分老车属此类。</li>
+        <li><b>滚动码(Rolling code,如 KeeLoq)</b>:每次按键码字按算法递增,接收方维护一个计数窗口。重放旧码通常已"过期"被拒。需要更复杂的手法(且常涉及法律红线),本工具不做。</li>
+      </ul>
+      <div class="callout danger small"><b>成败命门:采样率必须一致。</b>重放用的 <code>-s</code> 必须与录制时相同,否则信号在时间轴上被拉伸/压缩,接收方无法解码。本工具在重放时已把采样率锁定为录制值。</div>
+      <p class="mb-0">录制时看<b>实时功率</b>:安静时是底噪,目标一发射,平均功率明显跳升——这是"录到有效信号"而非空录的判据。</p>
+    </section>
+
+    <section id="s-gps" class="doc-sec mb-4">
+      <h5>7. GPS 欺骗原理</h5>
+      <p>GPS 接收机通过测量多颗卫星信号的到达时间差解算自身位置。若用 SDR 合成一组<b>更强的、内部自洽的伪造卫星信号</b>,接收机会锁到伪造信号,报出攻击者设定的位置——这就是 <b>GPS 欺骗(Spoofing)</b>。</p>
+      <ul>
+        <li><b>L1 C/A</b>:民用 GPS 信号,中心频率 <span class="kbd-freq">1575.42 MHz</span>,无加密,是欺骗的对象。</li>
+        <li><b>星历(Ephemeris)</b>:卫星轨道参数(RINEX 文件)。<code>gps-sdr-sim</code> 用它+目标坐标+时间,算出该时该地各卫星应有的信号并合成 IQ。真实接收机要锁定,星历需与<b>当前 GPS 时间</b>匹配。</li>
+        <li><b>时钟精度</b>:GPS 对频偏敏感,克隆板晶振漂移可能导致锁不上,需实测调整。</li>
+      </ul>
+      <p>本工具的做法:在地图上点多个坐标、各设停留时长 → 逐点用 gps-sdr-sim 合成信号 → 循环发射,让接收机的位置按时间跳变。地图支持高德(国内快,坐标自动 GCJ-02→WGS-84 纠偏)与 OpenStreetMap 两种底图。</p>
+      <div class="callout small mb-2"><b>获取当天广播星历(手动下载)</b> —— GPS 页可先试"自动获取";失败时到下列任一处下载 <code>brdcDDD0.YYn.gz</code>(DDD=年积日,YY=年份后两位),解压后在 GPS 页上传:
+        <ul class="mb-0 mt-1">
+          <li>NASA CDDIS(需免费 Earthdata 账号):<code>https://cddis.nasa.gov/archive/gnss/data/daily/</code></li>
+          <li>IGS 德国 BKG 镜像:<code>https://igs.bkg.bund.de/root_ftp/IGS/BRDC/</code></li>
+          <li>法国 IGN:<code>https://igs.ign.fr/pub/igs/data/</code></li>
+        </ul>
+      </div>
+      <div class="callout danger small"><b>必须在射频屏蔽箱内进行。</b>向开放空间发射 GPS 会干扰周边真实导航与授时基础设施,违法且危险。</div>
+    </section>
+
+    <section id="s-cli" class="doc-sec mb-4">
+      <h5>8. 命令行参考</h5>
+      <h6><code>hackrf_transfer</code>(抓包 / 重放)</h6>
+      <table class="table table-sm">
+        <tbody class="mono" style="font-size:.85rem">
+          <tr><td>-r / -t &lt;file&gt;</td><td>接收写文件 / 从文件发射</td></tr>
+          <tr><td>-f &lt;hz&gt;</td><td>中心频率</td></tr>
+          <tr><td>-s &lt;hz&gt;</td><td>采样率(收发须一致)</td></tr>
+          <tr><td>-b &lt;hz&gt;</td><td>基带带宽</td></tr>
+          <tr><td>-l / -g &lt;db&gt;</td><td>LNA / VGA 增益(接收)</td></tr>
+          <tr><td>-x &lt;db&gt;</td><td>TX 增益(发射)</td></tr>
+          <tr><td>-a / -p &lt;0|1&gt;</td><td>RF 放大器 / 天线偏置电源</td></tr>
+          <tr><td>-n &lt;n&gt;</td><td>传 n 个采样后停(n=采样率×秒)</td></tr>
+          <tr><td>-R</td><td>循环发射</td></tr>
+          <tr><td>-d &lt;serial&gt;</td><td>指定设备(多台时)</td></tr>
+        </tbody>
+      </table>
+      <h6><code>hackrf_sweep</code>(扫频)</h6>
+      <p class="mb-0 small"><code>-f low:high</code> 频率范围(MHz)· <code>-w</code> 每 bin 带宽(Hz)· <code>-1</code> 只扫一遍 · <code>-l/-g/-a</code> 增益。输出每行:时间、频段、bin 宽、每 bin 的 dB 值。</p>
+    </section>
+
+    <section id="s-safe" class="doc-sec mb-4">
+      <h5>9. 安全与合规</h5>
+      <ul class="mb-0">
+        <li>本工具定位<b>侦察 + 授权重放</b>。接收/扫描一般合法(被动);<b>发射</b>(重放、GPS)只可用于你<b>拥有或获得书面授权</b>的设备。</li>
+        <li><b>GPS 等高危发射必须在射频屏蔽箱内</b>,不得向开放空间辐射。</li>
+        <li>无线电发射受当地法规约束,请在合规前提下测试。滚动码去同步、干扰阻塞等破坏性手法不在本工具范围内。</li>
+      </ul>
+    </section>
+
+    <section id="s-quick" class="doc-sec mb-4">
+      <h5>10. 快速上手:重放一把授权钥匙</h5>
+      <ol class="mb-0">
+        <li><b>确认频率</b> —— 频谱扫描页选"汽车遥控 433MHz",连续扫描+峰值保持,按住钥匙,在峰值列表读出频点(如 <span class="kbd-freq">433.92 MHz</span>),点该行『抓包』。</li>
+        <li><b>录制</b> —— 抓包页已带入频点;采样率选"窄带 2 Msps",时长 3 秒,点开始的同时按住钥匙,看实时功率跳升。</li>
+        <li><b>重放</b> —— 抓包库里点重放,参数已自动回填(采样率锁定),天线靠近接收端,确认发射。固定码通常即可复现。</li>
+      </ol>
+    </section>
+
+  </div>
+</div>
+{% endblock %}

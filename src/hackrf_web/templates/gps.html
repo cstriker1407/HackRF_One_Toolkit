@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}GPS 模拟 · HackRF Toolkit{% endblock %}
+{% block content %}
+<h4 class="mb-2"><i class="bi bi-geo-alt text-danger"></i> GPS 模拟</h4>
+
+<div class="tx-zone p-0 mb-3">
+  <div class="tx-head px-3 py-2 fw-bold"><i class="bi bi-exclamation-octagon-fill"></i> 高危发射 —— 必须在射频屏蔽箱(法拉第箱)内进行</div>
+  <div class="p-3 small">向开放空间发射 GPS 会干扰周边真实导航与授时,<b>违法且危险</b>。仅用于对<b>你授权的设备</b>在屏蔽箱内测试 GPS 抗欺骗能力。本机为克隆板,时钟精度可能影响锁定,需实测。</div>
+</div>
+
+<!-- Row 1: map | waypoints -->
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-map"></i> 点击地图添加坐标</span>
+        <span class="small">底图:
+          <select id="tileSrc" class="form-select form-select-sm d-inline-block" style="width:auto">
+            <option value="gaode">高德(国内快)</option>
+            <option value="osm">OpenStreetMap(国际)</option>
+          </select>
+        </span>
+      </div>
+      <div class="card-body p-2">
+        <div id="map" style="height:440px;border-radius:.4rem"></div>
+        <div class="small text-muted mt-1">发射时按 1→2→3→… 顺序,每点停留其时长,循环往复,让接收机位置按时间跳变。坐标以 <b>WGS-84</b> 发射(高德底图已自动纠偏)。</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header bg-light d-flex justify-content-between"><span><i class="bi bi-pin-map"></i> 坐标序列 <span id="wpCount" class="badge bg-secondary"></span></span>
+        <button id="wpClearBtn" class="btn btn-sm btn-outline-secondary py-0" onclick="clearWps()">全部清除</button></div>
+      <div class="card-body p-0"><div id="wpList" style="max-height:470px;overflow-y:auto"><div class="text-muted small p-3">点地图添加坐标。</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Row 2: settings | log -->
+<div class="row g-3 mt-0">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header bg-light"><i class="bi bi-broadcast"></i> 发射设置</div>
+      <div class="card-body">
+        <div id="ephBox" class="alert alert-secondary py-2 small mb-2">星历状态加载中…</div>
+        <div class="mb-2">
+          <label class="form-label small mb-0">星历文件 (RINEX .nav) <i class="bi bi-question-circle text-primary help-i" data-help="gps-eph"></i></label>
+          <div class="input-group input-group-sm mb-1">
+            <input type="file" id="ephFile" class="form-control form-control-sm">
+            <button class="btn btn-outline-primary" onclick="uploadEph()">上传</button>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm w-100" onclick="fetchEph()" id="ephFetchBtn"><i class="bi bi-cloud-download"></i> 尝试自动获取当天星历</button>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col"><label class="form-label small mb-0">TX 增益 0-47 <i class="bi bi-question-circle text-primary help-i" data-help="txvga"></i></label><input id="gpsTx" type="number" class="form-control form-control-sm" value="30" min="0" max="47"></div>
+          <div class="col-auto form-check mt-4"><input id="gpsAmp" class="form-check-input" type="checkbox"><label class="form-check-label small" for="gpsAmp">Amp <i class="bi bi-question-circle text-primary help-i" data-help="amp"></i></label></div>
+        </div>
+        <div class="form-check form-switch mb-2"><input id="gpsAdv" class="form-check-input" type="checkbox"><label class="form-check-label small" for="gpsAdv">高级设置(展开全部参数) <i class="bi bi-question-circle text-primary help-i" data-help="sett-advanced"></i></label></div>
+        <div id="gpsAdvBox" class="border rounded p-2 mb-2 bg-light d-none">
+          <div class="row g-2 mb-2">
+            <div class="col"><label class="form-label small mb-0">中心频率 Hz <i class="bi bi-question-circle text-primary help-i" data-help="freq"></i></label><input id="gpsFreq" type="number" class="form-control form-control-sm mono" value="1575420000"></div>
+            <div class="col"><label class="form-label small mb-0">采样率 Hz <i class="bi bi-question-circle text-primary help-i" data-help="samp-rate"></i></label><input id="gpsSamp" type="number" class="form-control form-control-sm mono" value="2600000"></div>
+          </div>
+          <div class="form-check mb-2"><input id="gpsBias" class="form-check-input" type="checkbox"><label class="form-check-label small" for="gpsBias">天线偏置电源 <i class="bi bi-question-circle text-primary help-i" data-help="bias-tee"></i></label></div>
+          <label class="form-label small mb-0 d-flex justify-content-between"><span>专家:gps-sdr-sim 额外参数 <i class="bi bi-question-circle text-primary help-i" data-help="gps-extra"></i></span></label>
+          <input id="gpsExtra" class="form-control form-control-sm mono" placeholder="如 -i(关电离层)  -t 2024/1/1,0:0:0(设定场景时间)">
+        </div>
+        <label class="form-label small text-muted mb-0 d-flex justify-content-between"><span>将执行的命令(示意) <i class="bi bi-question-circle text-primary help-i" data-help="gps-cmd"></i></span></label>
+        <div class="cmd-box mb-2" id="gpsCmd" style="font-size:.7rem"></div>
+        <div class="d-flex gap-2">
+          <button id="gpsStart" class="btn btn-danger btn-sm flex-fill"><i class="bi bi-broadcast"></i> 生成并循环发射</button>
+          <button id="gpsStop" class="btn btn-outline-secondary btn-sm flex-fill" disabled><i class="bi bi-stop-fill"></i> 停止</button>
+        </div>
+        <div id="gpsStatus" class="small text-muted mt-2"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header bg-light"><i class="bi bi-terminal"></i> 运行日志</div>
+      <div class="card-body p-2"><div id="gpsLog" class="log-line" style="height:240px;overflow-y:auto">等待发射…</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script>
+window.HRF_PAGE_KIND = "gps";
+const $ = id => document.getElementById(id);
+let waypoints = [];   // {lat, lon, alt, dwell, marker}  (lat/lon in WGS-84)
+let poly = null, es=null, gpsJob=null, gpsRunning=false;
+
+// --- GCJ-02 (高德) <-> WGS-84 conversion ---
+function outOfChina(lat,lon){ return (lon<72.004||lon>137.8347)||(lat<0.8293||lat>55.8271); }
+function tLat(x,y){ let r=-100+2*x+3*y+0.2*y*y+0.1*x*y+0.2*Math.sqrt(Math.abs(x)); r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3; r+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3; r+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3; return r; }
+function tLon(x,y){ let r=300+x+2*y+0.1*x*x+0.1*x*y+0.1*Math.sqrt(Math.abs(x)); r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3; r+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3; r+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3; return r; }
+function wgs2gcj(lat,lon){ if(outOfChina(lat,lon))return [lat,lon]; const a=6378245,ee=0.00669342162296594323; let dLat=tLat(lon-105,lat-35),dLon=tLon(lon-105,lat-35); const rl=lat/180*Math.PI; let m=Math.sin(rl); m=1-ee*m*m; const sm=Math.sqrt(m); dLat=(dLat*180)/((a*(1-ee))/(m*sm)*Math.PI); dLon=(dLon*180)/(a/sm*Math.cos(rl)*Math.PI); return [lat+dLat,lon+dLon]; }
+function gcj2wgs(lat,lon){ const [gl,go]=wgs2gcj(lat,lon); return [lat*2-gl, lon*2-go]; }
+
+// --- map + switchable tiles ---
+const map = L.map("map").setView([31.2304, 121.4737], 12);
+const tiles = {
+  gaode: L.tileLayer("https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
+    { subdomains:"1234", maxZoom:18, attribution:"© 高德" }),
+  osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { maxZoom:19, attribution:"© OpenStreetMap" }),
+};
+let curSrc = "gaode";
+tiles.gaode.addTo(map);
+$("tileSrc").onchange = e => { map.removeLayer(tiles[curSrc]); curSrc=e.target.value; tiles[curSrc].addTo(map); };
+
+map.on("click", e => {
+  if(gpsRunning) return;   // locked while transmitting
+  const shown=[e.latlng.lat, e.latlng.lng];
+  const wgs = curSrc==="gaode" ? gcj2wgs(shown[0],shown[1]) : shown;
+  addWp(wgs[0], wgs[1], shown);
+});
+
+function addWp(lat, lon, shown, alt, dwell){
+  const m = L.circleMarker(shown||[lat,lon], {radius:11, color:"#dc3545", fillColor:"#dc3545", fillOpacity:.85, weight:2})
+    .addTo(map).bindTooltip(String(waypoints.length+1), {permanent:true, direction:"center", className:"wp-tip"});
+  waypoints.push({lat, lon, alt:alt!=null?alt:20, dwell:dwell!=null?dwell:10, marker:m});
+  redraw(); saveWps();
+}
+function updWp(i,key,val){ waypoints[i][key]=+val; saveWps(); }
+function clearWps(){ if(gpsRunning) return; waypoints.forEach(w=>map.removeLayer(w.marker)); waypoints=[]; redraw(); saveWps(); }
+function delWp(i){ if(gpsRunning) return; map.removeLayer(waypoints[i].marker); waypoints.splice(i,1); relabel(); redraw(); saveWps(); }
+// persist across page navigation (client-side)
+function saveWps(){ try{ localStorage.setItem("hrf_gps_wps", JSON.stringify(waypoints.map(w=>({lat:w.lat,lon:w.lon,alt:w.alt,dwell:w.dwell,dll:w.marker.getLatLng()})))); }catch(e){} }
+function loadWps(){ try{ const s=JSON.parse(localStorage.getItem("hrf_gps_wps")||"[]"); s.forEach(w=> addWp(w.lat,w.lon, w.dll?[w.dll.lat,w.dll.lng]:null, w.alt, w.dwell)); if(waypoints.length) map.fitBounds(L.latLngBounds(waypoints.map(w=>w.marker.getLatLng())).pad(0.3)); }catch(e){} }
+function relabel(){ waypoints.forEach((w,i)=>{ w.marker.unbindTooltip().bindTooltip(String(i+1),{permanent:true,direction:"center",className:"wp-tip"}); }); }
+
+function redraw(){
+  if(poly){ map.removeLayer(poly); poly=null; }
+  if(waypoints.length>1) poly = L.polyline(waypoints.map(w=>w.marker.getLatLng()), {color:"#dc3545", weight:2, dashArray:"5,6"}).addTo(map);
+  $("wpCount").textContent = waypoints.length||"";
+  const box=$("wpList");
+  if(!waypoints.length){ box.innerHTML='<div class="text-muted small p-3">点地图添加坐标。</div>'; return; }
+  box.innerHTML = `<table class="table table-sm mb-0 align-middle"><thead class="table-light" style="position:sticky;top:0"><tr><th>#</th><th>纬度</th><th>经度</th><th>海拔</th><th>停留</th><th></th></tr></thead><tbody>`+
+    waypoints.map((w,i)=>`<tr id="wprow${i}">
+      <td>${i+1}</td>
+      <td class="mono small">${w.lat.toFixed(5)}</td>
+      <td class="mono small">${w.lon.toFixed(5)}</td>
+      <td><input type="number" class="form-control form-control-sm py-0" style="width:66px" value="${w.alt}" ${gpsRunning?'disabled':''} onchange="updWp(${i},'alt',this.value)"></td>
+      <td><input type="number" class="form-control form-control-sm py-0" style="width:58px" value="${w.dwell}" min="1" ${gpsRunning?'disabled':''} onchange="updWp(${i},'dwell',this.value)"></td>
+      <td>${gpsRunning?'':`<button class="btn btn-outline-secondary btn-sm py-0" onclick="delWp(${i})"><i class="bi bi-trash"></i></button>`}</td></tr>`).join("")+
+    `</tbody></table>`;
+}
+
+async function loadEph(){
+  try{
+    const s = await (await fetch("/api/gps/status")).json();
+    if(!s.available){ $("ephBox").className="alert alert-danger py-2 small mb-2"; $("ephBox").innerHTML='<b>gps-sdr-sim 未安装</b>'; $("gpsStart").disabled=true; return; }
+    if(s.ephemeris){
+      const e=s.ephemeris;
+      const warn = e.source==="bundled-sample" ? ` <span class="text-warning">(${e.bundled_date})</span>` : ' <span class="text-success">(当前星历,已就绪)</span>';
+      $("ephBox").className="alert alert-secondary py-2 small mb-2";
+      $("ephBox").innerHTML=`星历:<code>${e.name}</code>${warn}<div class="text-muted">L1 ${(s.l1_hz/1e6).toFixed(3)} MHz · ${(s.samp_rate/1e6).toFixed(1)} Msps</div>`;
+    } else { $("ephBox").className="alert alert-warning py-2 small mb-2"; $("ephBox").innerHTML="缺少星历,请上传或自动获取。"; }
+  }catch(e){ $("ephBox").innerHTML="无法连接 RF_Bridge"; }
+}
+async function uploadEph(){
+  const f=$("ephFile").files[0]; if(!f){ alert("请选择星历文件"); return; }
+  const fd=new FormData(); fd.append("file", f);
+  const r=await fetch("/api/gps/ephemeris",{method:"POST",body:fd});
+  if(r.ok){ loadEph(); } else { const j=await r.json().catch(()=>({})); alert("上传失败: "+(j.error||r.status)); }
+}
+async function fetchEph(){
+  const b=$("ephFetchBtn"); b.disabled=true; b.innerHTML='<span class="spinner-border spinner-border-sm"></span> 获取中…';
+  try{
+    const r=await fetch("/api/gps/ephemeris/fetch",{method:"POST"});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok){ loadEph(); alert(j.message||"已获取"); }
+    else { alert((j.message||"获取失败")+"\n\n手动下载见『帮助』页 GPS 一节的链接。"); }
+  }catch(e){ alert("获取失败: "+e.message); }
+  b.disabled=false; b.innerHTML='<i class="bi bi-cloud-download"></i> 尝试自动获取当天星历';
+}
+
+function log(msg){ const l=$("gpsLog"); if(l.textContent==="等待发射…") l.innerHTML=""; l.innerHTML += msg+"<br>"; l.scrollTop=l.scrollHeight; }
+function highlight(i){ waypoints.forEach((w,k)=> w.marker.setStyle({fillColor:k===i?"#39d353":"#dc3545", color:k===i?"#39d353":"#dc3545", radius:k===i?14:11})); }
+
+$("gpsAdv").onchange = e => $("gpsAdvBox").classList.toggle("d-none", !e.target.checked);
+function buildGpsCmd(){
+  const freq=$("gpsFreq").value, samp=$("gpsSamp").value, tx=$("gpsTx").value, extra=$("gpsExtra").value.trim();
+  const amp=$("gpsAmp").checked?" -a 1":"", bias=$("gpsBias").checked?" -p 1":"";
+  const dev=HRF.getDevice()?(" -d "+HRF.getDevice()):"";
+  const gen=`gps-sdr-sim -e ephemeris.nav -l <纬度>,<经度>,<海拔> -d <停留s> -s ${samp} -b 8${extra?" "+extra:""} -o wpN.bin`;
+  const txc=`hackrf_transfer -t wpN.bin -f ${freq} -s ${samp} -x ${tx}${amp}${bias}${dev}`;
+  $("gpsCmd").textContent="① 逐坐标生成:\n"+gen+"\n② 循环发射:\n"+txc;
+}
+["gpsFreq","gpsSamp","gpsTx","gpsExtra","gpsAmp","gpsBias"].forEach(id=> $(id).addEventListener("input", buildGpsCmd));
+
+$("gpsStart").onclick = async () => {
+  if(!waypoints.length){ alert("请先在地图上添加至少一个坐标"); return; }
+  const g=await HRF.guardStart("gps");
+  if(!g.ok){ $("gpsStatus").className="small text-warning mt-2"; $("gpsStatus").innerHTML=`有『${HRF.kindLabel(g.kind)}』任务正在运行,请到其页面或右上角状态灯停止`; return; }
+  const body = { waypoints: waypoints.map(w=>({lat:w.lat,lon:w.lon,alt:w.alt,dwell:w.dwell})),
+    txgain:+$("gpsTx").value, amp:$("gpsAmp").checked?1:0,
+    freq_hz:+$("gpsFreq").value, samp_rate:+$("gpsSamp").value, bias_tee:$("gpsBias").checked?1:0 };
+  const ex=$("gpsExtra").value.trim(); if(ex) body.extra_gen=ex;
+  const dev = HRF.getDevice(); if(dev) body.serial=dev;
+  const r = await HRF.post("/api/gps/simulate", body);
+  if(r.status===409){ $("gpsStatus").className="small text-warning mt-2"; $("gpsStatus").textContent="RF_Bridge 忙,请到运行中任务的页面或右上角状态灯停止。"; return; }
+  if(!r.ok){ $("gpsStatus").className="small text-danger mt-2"; $("gpsStatus").textContent="启动失败: "+(r.body.error||r.status); return; }
+  attachGps(r.body.job_id);
+};
+function rowHighlight(i){
+  document.querySelectorAll("#wpList tr").forEach(r=>r.classList.remove("table-success"));
+  const row=document.getElementById("wprow"+i); if(row) row.classList.add("table-success");
+}
+function setGpsRunning(on){
+  gpsRunning=on; redraw();               // redraw locks/unlocks the table inputs
+  $("wpClearBtn").disabled=on;
+  $("tileSrc").disabled=on;
+  ["gpsFreq","gpsSamp","gpsExtra","gpsBias","gpsAmp","gpsTx","gpsAdv"].forEach(id=>{ const el=$(id); if(el) el.disabled=on; });
+  $("gpsStart").disabled=on; $("gpsStop").disabled=!on;
+}
+function attachGps(jid){
+  gpsJob=jid; setGpsRunning(true);
+  $("gpsStatus").className="small text-danger mt-2"; $("gpsStatus").innerHTML='<i class="bi bi-broadcast"></i> 发射中…';
+  es=HRF.streamJob(gpsJob, ev=>{
+    if(ev.kind==="info") log(ev.msg);
+    else if(ev.kind==="gps_wp"){ highlight(ev.index); rowHighlight(ev.index); $("gpsStatus").innerHTML=`<i class="bi bi-broadcast"></i> 第 ${ev.loop} 轮 · 坐标 ${ev.index+1}`; }
+  }, ()=>{ setGpsRunning(false); $("gpsStatus").className="small text-muted mt-2"; $("gpsStatus").textContent="已停止"; highlight(-1); rowHighlight(-1); gpsJob=null; log("■ 发射已结束"); });
+}
+$("gpsStop").onclick = async () => {
+  if(!gpsJob) return;
+  $("gpsStop").disabled=true; log("⏹ 正在停止…请稍候");
+  $("gpsStatus").className="small text-warning mt-2"; $("gpsStatus").innerHTML='<span class="spinner-border spinner-border-sm"></span> 正在停止…';
+  try{ await HRF.post("/api/jobs/"+gpsJob+"/stop",{}); }catch(e){}
+  // stop may take a moment to kill the child process — wait until the bridge is idle
+  for(let i=0;i<25;i++){ const c=await HRF.currentJob(); if(!c) break; await new Promise(r=>setTimeout(r,300)); }
+  if(es) es.close();
+  if(gpsJob){ setGpsRunning(false); $("gpsStatus").className="small text-muted mt-2"; $("gpsStatus").textContent="已停止"; highlight(-1); rowHighlight(-1); gpsJob=null; }
+  log("✓ 已停止,可安全操作");
+};
+
+loadEph();
+loadWps();   // restore waypoints saved before navigating away
+buildGpsCmd();
+setTimeout(()=>map.invalidateSize(), 200);
+// reconnect to a running GPS job (survives leaving/returning to the page)
+(async function(){ const cur=await HRF.currentJob(); if(cur && cur.kind==="gps"){ log("↻ 已重连到进行中的 GPS 发射(坐标序列在后台循环)"); attachGps(cur.id); } })();
+</script>
+<style>.wp-tip{background:transparent;border:none;box-shadow:none;color:#fff;font-weight:700;font-size:.75rem}</style>
+{% endblock %}

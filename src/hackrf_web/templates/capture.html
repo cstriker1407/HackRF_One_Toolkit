@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block title %}抓包 / 重放 · HackRF Toolkit{% endblock %}
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-record-circle text-danger"></i> 抓包 / 重放</h4>
+
+<div class="row g-3">
+  <!-- capture form (narrower) -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header bg-light"><i class="bi bi-record-circle"></i> 录制 IQ</div>
+      <div class="card-body">
+        <fieldset id="capFields">
+        <div class="mb-2">
+          <label class="form-label small mb-0">名称</label>
+          <input id="capName" class="form-control form-control-sm" placeholder="留空自动命名 cap_频率_日期时间">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-0">频段预设</label>
+          <div id="bandChips">
+            {% for b in bands %}
+            <span class="badge bg-light text-dark border band-chip me-1 mb-1" data-hz="{{ b.center_hz }}" title="{{ b.note }}">{{ b.name }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-0">中心频率 (Hz) <i class="bi bi-question-circle text-primary help-i" data-help="freq"></i></label>
+          <input id="capFreq" type="number" class="form-control form-control-sm mono" value="433920000">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-0">采样率预设 <i class="bi bi-question-circle text-primary help-i" data-help="samp-rate"></i></label>
+          <select id="sampPreset" class="form-select form-select-sm">
+            {% for s in samp_presets %}
+            <option value="{{ s.samp_rate }}" data-bw="{{ s.bandwidth }}">{{ s.name }} — {{ s.note }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-0">时长 (秒, 0=手动停) <i class="bi bi-question-circle text-primary help-i" data-help="n-samples"></i></label>
+          <input id="capDur" type="number" class="form-control form-control-sm" value="3" min="0" step="0.5">
+        </div>
+
+        <div class="form-check form-switch mb-2 mt-1">
+          <input id="capAdv" class="form-check-input" type="checkbox"><label class="form-check-label small" for="capAdv">高级设置(展开全部参数) <i class="bi bi-question-circle text-primary help-i" data-help="sett-advanced"></i></label>
+        </div>
+        <div id="capAdvBox" class="border rounded p-2 mb-2 bg-light d-none">
+          <div class="row g-2 mb-2">
+            <div class="col"><label class="form-label small mb-0">LNA 0-40 <i class="bi bi-question-circle text-primary help-i" data-help="lna"></i></label><input id="capLna" type="number" class="form-control form-control-sm" value="32" step="8" min="0" max="40"></div>
+            <div class="col"><label class="form-label small mb-0">VGA 0-62 <i class="bi bi-question-circle text-primary help-i" data-help="vga"></i></label><input id="capVga" type="number" class="form-control form-control-sm" value="16" step="2" min="0" max="62"></div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col"><label class="form-label small mb-0">带宽 Hz(留空=预设) <i class="bi bi-question-circle text-primary help-i" data-help="bandwidth"></i></label><input id="capBw" type="number" class="form-control form-control-sm mono" placeholder="自动"></div>
+            <div class="col"><label class="form-label small mb-0">采样点数(留空=用时长) <i class="bi bi-question-circle text-primary help-i" data-help="n-samples"></i></label><input id="capN" type="number" class="form-control form-control-sm mono" placeholder="自动"></div>
+          </div>
+          <div class="d-flex gap-3">
+            <div class="form-check"><input id="capAmp" class="form-check-input" type="checkbox"><label class="form-check-label small" for="capAmp">Amp 放大器 <i class="bi bi-question-circle text-primary help-i" data-help="amp"></i></label></div>
+            <div class="form-check"><input id="capBias" class="form-check-input" type="checkbox"><label class="form-check-label small" for="capBias">天线偏置电源 <i class="bi bi-question-circle text-primary help-i" data-help="bias-tee"></i></label></div>
+          </div>
+        </div>
+
+        <label class="form-label small mb-0 d-flex justify-content-between">
+          <span>将执行的命令 <i class="bi bi-question-circle text-primary help-i" data-help="command-preview"></i></span>
+          <span class="form-check form-switch mb-0"><input id="capExpert" class="form-check-input" type="checkbox"><label class="form-check-label small" for="capExpert">专家模式(可手改)</label></span>
+        </label>
+        <textarea id="capCmd" class="cmd-box" rows="4" readonly></textarea>
+        <div id="capExpertNote" class="form-text text-warning d-none" style="font-size:.72rem"><i class="bi bi-pencil-fill"></i> 专家模式已开启:将<b>按上方命令原样执行</b>(仅校验为 hackrf_transfer + 合法参数,文件限制在抓包目录内)。</div>
+        </fieldset>
+
+        <button id="capStart" class="btn btn-danger btn-sm w-100 mt-3"><i class="bi bi-record-fill"></i> 开始录制</button>
+
+        <div class="mt-3">
+          <div class="d-flex justify-content-between small text-muted">
+            <span>实时功率 (dBFS ↔ 时间) <i class="bi bi-question-circle text-primary help-i" data-help="realtime-power"></i></span>
+            <span id="capCountdown" class="fw-bold text-danger"></span>
+          </div>
+          <canvas id="capChart" class="specline" width="500" height="90" style="height:90px"></canvas>
+        </div>
+        <div id="capStatus" class="small text-muted mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- capture library (wider, scrollable) -->
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header bg-light d-flex justify-content-between">
+        <span><i class="bi bi-collection"></i> 抓包库 <span id="capCount" class="badge bg-secondary"></span></span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadCaptures()"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+      <div class="card-body p-0">
+        <div id="capList" style="max-height:640px;overflow-y:auto"><div class="text-muted small p-3">加载中…</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- replay modal -->
+<div class="modal fade" id="replayModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content tx-zone">
+      <div class="modal-header tx-head">
+        <h6 class="modal-title mb-0"><i class="bi bi-broadcast-pin"></i> 重放发射</h6>
+        <button type="button" id="rpCloseBtn" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger py-2 small mb-3"><i class="bi bi-exclamation-triangle-fill"></i>
+          <b>发射操作</b> —— 仅可对你授权的设备进行。采样率已锁定为录制时的值(必须一致)。</div>
+        <fieldset id="rpFields">
+        <input type="hidden" id="rpPath"><input type="hidden" id="rpBytes">
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="form-label small mb-0">文件</label><input id="rpName" class="form-control form-control-sm mono" readonly></div>
+          <div class="col-md-3"><label class="form-label small mb-0">频率 Hz <i class="bi bi-question-circle text-primary help-i" data-help="freq"></i></label><input id="rpFreq" type="number" class="form-control form-control-sm mono"></div>
+          <div class="col-md-3"><label class="form-label small mb-0">采样率 Hz <i class="bi bi-question-circle text-primary help-i" data-help="samp-rate"></i></label><input id="rpSamp" type="number" class="form-control form-control-sm mono" readonly></div>
+        </div>
+        <div class="row g-2 mb-2 align-items-end">
+          <div class="col-auto"><label class="form-label small mb-0">TX 增益 0-47 <i class="bi bi-question-circle text-primary help-i" data-help="txvga"></i></label><input id="rpTx" type="number" class="form-control form-control-sm" value="30" min="0" max="47" style="width:90px"></div>
+          <div class="col-auto form-check mb-1"><input id="rpRepeat" class="form-check-input" type="checkbox"><label class="form-check-label small" for="rpRepeat">循环发射 <i class="bi bi-question-circle text-primary help-i" data-help="repeat"></i></label></div>
+        </div>
+        <div class="form-check form-switch mb-2"><input id="rpAdv" class="form-check-input" type="checkbox"><label class="form-check-label small" for="rpAdv">高级设置(展开全部参数) <i class="bi bi-question-circle text-primary help-i" data-help="sett-advanced"></i></label></div>
+        <div id="rpAdvBox" class="border rounded p-2 mb-2 bg-white d-none">
+          <div class="row g-2 mb-2">
+            <div class="col"><label class="form-label small mb-0">带宽 Hz(留空=预设) <i class="bi bi-question-circle text-primary help-i" data-help="bandwidth"></i></label><input id="rpBw" type="number" class="form-control form-control-sm mono" placeholder="自动"></div>
+            <div class="col"><label class="form-label small mb-0">采样点数(留空=整文件) <i class="bi bi-question-circle text-primary help-i" data-help="n-samples"></i></label><input id="rpN" type="number" class="form-control form-control-sm mono" placeholder="自动"></div>
+          </div>
+          <div class="d-flex gap-3">
+            <div class="form-check"><input id="rpAmp" class="form-check-input" type="checkbox"><label class="form-check-label small" for="rpAmp">Amp 放大器 <i class="bi bi-question-circle text-primary help-i" data-help="amp"></i></label></div>
+            <div class="form-check"><input id="rpBias" class="form-check-input" type="checkbox"><label class="form-check-label small" for="rpBias">天线偏置电源 <i class="bi bi-question-circle text-primary help-i" data-help="bias-tee"></i></label></div>
+          </div>
+        </div>
+        <label class="form-label small mb-0 d-flex justify-content-between">
+          <span>将执行的命令 <i class="bi bi-question-circle text-primary help-i" data-help="command-preview"></i></span>
+          <span class="form-check form-switch mb-0"><input id="rpExpert" class="form-check-input" type="checkbox"><label class="form-check-label small" for="rpExpert">专家模式</label></span>
+        </label>
+        <textarea id="rpCmd" class="cmd-box" rows="4" readonly></textarea>
+        <div id="rpExpertNote" class="form-text text-warning d-none" style="font-size:.72rem"><i class="bi bi-pencil-fill"></i> 专家模式已开启:将<b>按上方命令原样执行</b>(仅校验为 hackrf_transfer + 合法参数)。</div>
+        </fieldset>
+        <div class="mt-3">
+          <div class="d-flex justify-content-between small text-muted">
+            <span>发射功率 (dBFS ↔ 时间) <i class="bi bi-question-circle text-primary help-i" data-help="realtime-power"></i></span>
+            <span id="rpCountdown" class="fw-bold text-danger"></span>
+          </div>
+          <canvas id="rpChart" class="specline" width="700" height="90" style="height:90px"></canvas>
+        </div>
+        <div id="rpStatus" class="small text-muted mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <span id="rpLockNote" class="small text-danger me-auto d-none"><i class="bi bi-lock-fill"></i> 发射中不可关闭,请先停止发射</span>
+        <button id="rpStart" class="btn btn-danger btn-sm"><i class="bi bi-broadcast"></i> 确认发射</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.HRF_PAGE_KINDS = ["capture", "replay"];
+const $ = id => document.getElementById(id);
+const capChart = new HRF.PowerChart($("capChart"), {min:-60, max:0, seconds:30});
+let capEs=null, capJob=null, capCountTimer=null;
+// real recording/playback seconds from the ACTUAL command's -n / -s
+function cmdDur(cmd){ const p=(cmd||"").trim().split(/\s+/); let n=0,s=0; for(let i=0;i<p.length-1;i++){ if(p[i]==="-n")n=+p[i+1]; if(p[i]==="-s")s=+p[i+1]; } return (n>0&&s>0)? n/s : 0; }
+
+function pad2(n){ return String(n).padStart(2,"0"); }
+function defaultCapName(){
+  const d=new Date();
+  const stamp=d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+"_"+pad2(d.getHours())+pad2(d.getMinutes())+pad2(d.getSeconds());
+  const mhz=+$("capFreq").value/1e6;
+  const f=isFinite(mhz)&&mhz>0 ? mhz.toFixed(3).replace(/\.?0+$/,"")+"M_" : "";
+  return "cap_"+f+stamp;
+}
+function capOpts(){
+  const sp=$("sampPreset"), samp=+sp.value, presetBw=+sp.selectedOptions[0].dataset.bw;
+  const bwOv=$("capBw").value.trim(), nOv=$("capN").value.trim(), dur=+$("capDur").value;
+  const name=($("capName").value.trim()||defaultCapName());
+  return { mode:"rx", file:name+".raw", freq_hz:+$("capFreq").value, samp_rate:samp,
+    bandwidth: bwOv? +bwOv : presetBw, lna:+$("capLna").value, vga:+$("capVga").value,
+    amp:$("capAmp").checked?1:0, bias_tee:$("capBias").checked?1:0,
+    n_samples: nOv? +nOv : (dur>0? Math.round(samp*dur):0), serial:HRF.getDevice()||undefined };
+}
+function refreshCapCmd(){ if(!$("capExpert").checked) $("capCmd").value=HRF.buildTransferCmd(capOpts()); }
+document.querySelectorAll("#bandChips .band-chip").forEach(ch => ch.onclick = () => { $("capFreq").value=ch.dataset.hz; refreshCapCmd(); });
+$("capAdv").onchange = e => $("capAdvBox").classList.toggle("d-none", !e.target.checked);
+$("capExpert").onchange = e => { $("capCmd").readOnly=!e.target.checked; if(!e.target.checked) refreshCapCmd(); $("capCmd").classList.toggle("border-warning", e.target.checked); $("capExpertNote").classList.toggle("d-none", !e.target.checked); };
+["capName","capFreq","sampPreset","capDur","capLna","capVga","capBw","capN","capAmp","capBias"].forEach(id=> $(id).addEventListener("input", refreshCapCmd));
+const _qsFreq=new URLSearchParams(location.search).get("freq");
+if(_qsFreq && /^\d+$/.test(_qsFreq)){ $("capFreq").value=_qsFreq; }
+refreshCapCmd();
+
+function setCapBtn(rec){
+  if(rec){ $("capStart").innerHTML='<i class="bi bi-stop-fill"></i> 停止录制'; $("capStart").classList.replace("btn-danger","btn-secondary"); }
+  else { $("capStart").innerHTML='<i class="bi bi-record-fill"></i> 开始录制'; $("capStart").classList.replace("btn-secondary","btn-danger"); }
+}
+function startCountdown(el, endSec){
+  stopCountdown(el._t);
+  el._t = setInterval(()=>{ const r=Math.max(0, endSec-Date.now()/1000); el.textContent=r>0?("剩余 "+r.toFixed(1)+"s"):"即将结束…"; if(r<=0){ clearInterval(el._t); el._t=null; } }, 100);
+  return el._t;
+}
+function stopCountdown(t){ if(t) clearInterval(t); }
+
+$("capStart").onclick = async () => {
+  if(capJob){ await HRF.post("/api/jobs/"+capJob+"/stop",{}); if(capEs) capEs.close(); return; }
+  const st=$("capStatus"); let r;
+  const g=await HRF.guardStart("capture");
+  if(!g.ok){ st.className="small text-warning mt-2"; st.innerHTML=`有『${HRF.kindLabel(g.kind)}』任务正在运行,请到其页面或右上角状态灯停止`; return; }
+  const o=capOpts();
+  if($("capExpert").checked){ r = await HRF.post("/api/transfer_raw", {argv: $("capCmd").value.trim().split(/\s+/)}); }
+  else {
+    const body={ name:$("capName").value.trim()||defaultCapName(), freq_hz:o.freq_hz, samp_rate:o.samp_rate,
+      bandwidth:o.bandwidth, lna:o.lna, vga:o.vga, amp:o.amp, bias_tee:o.bias_tee };
+    if(o.n_samples) body.n_samples=o.n_samples; if(o.serial) body.serial=o.serial;
+    r = await HRF.post("/api/capture", body);
+  }
+  if(r.status===409){ st.className="small text-warning mt-2"; st.textContent="RF_Bridge 忙,请到运行中任务的页面或右上角状态灯停止。"; return; }
+  if(!r.ok){ st.className="small text-danger mt-2"; st.textContent="启动失败: "+(r.body.error||r.status); return; }
+  capJob=r.body.job_id; $("capFields").disabled=true; setCapBtn(true);
+  const durSec = cmdDur($("capCmd").value);   // real seconds from the actual command
+  capChart.setDuration(durSec);
+  st.className="small text-success mt-2"; st.innerHTML='<i class="bi bi-record-fill text-danger"></i> 录制中…';
+  if(durSec>0) startCountdown($("capCountdown"), Date.now()/1000+durSec); else $("capCountdown").textContent="手动停止";
+  capEs=HRF.streamJob(capJob, ev=>{ if(ev.kind==="power") capChart.push(ev.dbfs); }, ()=>{
+    $("capFields").disabled=false; setCapBtn(false); stopCountdown($("capCountdown")._t); $("capCountdown").textContent="";
+    st.className="small text-muted mt-2"; st.textContent="录制结束"; capJob=null; loadCaptures(); });
+};
+
+// ---------- library ----------
+async function loadCaptures(){
+  const box=$("capList");
+  try{
+    const j=await (await fetch("/api/captures")).json();
+    const rows=j.captures||[];
+    $("capCount").textContent = rows.length? rows.length : "";
+    if(!rows.length){ box.innerHTML='<div class="text-muted small p-3">还没有抓包。左侧开始录制。</div>'; return; }
+    box.innerHTML=`<table class="table table-sm table-hover mb-0 align-middle"><thead class="table-light" style="position:sticky;top:0"><tr><th>名称</th><th>频率</th><th>采样率</th><th>大小</th><th>功率</th><th></th></tr></thead><tbody>${rows.map(rowHtml).join("")}</tbody></table>`;
+  }catch(e){ box.innerHTML=`<div class="text-danger small p-3">加载失败: ${e.message}</div>`; }
+}
+function rowHtml(c){
+  const p=c.params||{}, pw=(c.power_min_dbfs!=null)?`${c.power_min_dbfs}~${c.power_max_dbfs}`:"—";
+  return `<tr class="cap-row">
+    <td><code>${c.name}</code></td>
+    <td class="small">${p.freq_hz?HRF.fmtHz(p.freq_hz):"—"}</td>
+    <td class="small">${p.samp_rate?HRF.fmtHz(p.samp_rate).replace('Hz','sps'):"—"}</td>
+    <td class="small">${HRF.fmtBytes(c.size_bytes||0)}</td>
+    <td class="small mono">${pw}</td>
+    <td class="text-nowrap">
+      <button class="btn btn-outline-danger btn-sm py-0" onclick='openReplay(${JSON.stringify(c)})' title="重放"><i class="bi bi-broadcast"></i></button>
+      <a class="btn btn-outline-primary btn-sm py-0" href="/api/captures/${encodeURIComponent(c.name)}/download" title="下载 .raw"><i class="bi bi-download"></i></a>
+      <button class="btn btn-outline-secondary btn-sm py-0" onclick='delCap("${c.name}")' title="删除"><i class="bi bi-trash"></i></button>
+    </td></tr>`;
+}
+async function delCap(name){ if(!confirm("删除抓包 "+name+" ?")) return; await fetch("/api/captures/"+encodeURIComponent(name),{method:"DELETE"}); loadCaptures(); }
+
+// ---------- replay ----------
+const rpChart = new HRF.PowerChart($("rpChart"), {min:-60, max:0, seconds:30});
+let rpEs=null, rpJob=null, replayModal=null;
+$("rpAdv").onchange = e => $("rpAdvBox").classList.toggle("d-none", !e.target.checked);
+$("rpExpert").onchange = e => { $("rpCmd").readOnly=!e.target.checked; if(!e.target.checked) refreshRpCmd(); $("rpCmd").classList.toggle("border-warning", e.target.checked); $("rpExpertNote").classList.toggle("d-none", !e.target.checked); };
+function rpOpts(){
+  const bwOv=$("rpBw").value.trim(), nOv=$("rpN").value.trim();
+  return { mode:"tx", file:$("rpPath").value, freq_hz:+$("rpFreq").value, samp_rate:+$("rpSamp").value,
+    bandwidth: bwOv? +bwOv : undefined, txvga:+$("rpTx").value, amp:$("rpAmp").checked?1:0,
+    bias_tee:$("rpBias").checked?1:0, repeat:$("rpRepeat").checked,
+    n_samples: nOv? +nOv : undefined, serial:HRF.getDevice()||undefined };
+}
+function refreshRpCmd(){ if(!$("rpExpert").checked) $("rpCmd").value=HRF.buildTransferCmd(rpOpts()); }
+["rpFreq","rpSamp","rpTx","rpBw","rpN","rpAmp","rpBias","rpRepeat"].forEach(id=> $(id).addEventListener("input", refreshRpCmd));
+
+// block closing the modal while transmitting (X / backdrop / ESC)
+$("replayModal").addEventListener("hide.bs.modal", e => { if(rpJob) e.preventDefault(); });
+function setRpBtn(tx){
+  if(tx){ $("rpStart").innerHTML='<i class="bi bi-stop-fill"></i> 停止发射'; $("rpStart").classList.replace("btn-danger","btn-secondary"); }
+  else { $("rpStart").innerHTML='<i class="bi bi-broadcast"></i> 确认发射'; $("rpStart").classList.replace("btn-secondary","btn-danger"); }
+  $("rpCloseBtn").classList.toggle("d-none", tx);   // hide X while transmitting
+  $("rpLockNote").classList.toggle("d-none", !tx);
+}
+function openReplay(c){
+  const p=c.params||{};
+  $("rpPath").value=c.raw_path; $("rpName").value=c.name; $("rpBytes").value=c.size_bytes||0;
+  $("rpFreq").value=p.freq_hz||""; $("rpSamp").value=p.samp_rate||"";
+  $("rpStatus").textContent=""; $("rpCountdown").textContent=""; setRpBtn(false); rpChart.reset();
+  refreshRpCmd();
+  replayModal=bootstrap.Modal.getOrCreateInstance($("replayModal")); replayModal.show();
+}
+$("rpStart").onclick = async () => {
+  if(rpJob){ await HRF.post("/api/jobs/"+rpJob+"/stop",{}); if(rpEs) rpEs.close(); return; }
+  const st=$("rpStatus"); const o=rpOpts(); let r;
+  const g=await HRF.guardStart("replay");
+  if(!g.ok){ st.className="small text-warning mt-2"; st.innerHTML=`有『${HRF.kindLabel(g.kind)}』任务正在运行,请到其页面或右上角状态灯停止`; return; }
+  if($("rpExpert").checked){ r = await HRF.post("/api/transfer_raw", {argv: $("rpCmd").value.trim().split(/\s+/)}); }
+  else {
+    const body={ path:o.file, freq_hz:o.freq_hz, samp_rate:o.samp_rate, txvga:o.txvga, amp:o.amp, bias_tee:o.bias_tee, repeat:o.repeat };
+    if(o.bandwidth) body.bandwidth=o.bandwidth; if(o.n_samples) body.n_samples=o.n_samples; if(o.serial) body.serial=o.serial;
+    r = await HRF.post("/api/replay", body);
+  }
+  if(r.status===409){ st.className="small text-warning mt-2"; st.textContent="RF_Bridge 忙,请到运行中任务的页面或右上角状态灯停止。"; return; }
+  if(!r.ok){ st.className="small text-danger mt-2"; st.textContent="发射失败: "+(r.body.error||r.status); return; }
+  rpJob=r.body.job_id; $("rpFields").disabled=true; setRpBtn(true);
+  st.className="small text-danger mt-2"; st.innerHTML='<i class="bi bi-broadcast"></i> 发射中…';
+  // real duration from the command's -n, else whole file (bytes/2 ÷ samp); repeat = unbounded
+  let durSec=0;
+  if(!o.repeat){ const dn=cmdDur($("rpCmd").value); const samp=+$("rpSamp").value;
+    durSec = dn>0? dn : (samp>0? (+$("rpBytes").value/2)/samp : 0); }
+  rpChart.setDuration(durSec);
+  if(durSec>0) startCountdown($("rpCountdown"), Date.now()/1000+durSec); else $("rpCountdown").textContent = o.repeat?"循环发射中":"发射中";
+  rpEs=HRF.streamJob(rpJob, ev=>{ if(ev.kind==="power") rpChart.push(ev.dbfs); }, ()=>{
+    $("rpFields").disabled=false; setRpBtn(false); stopCountdown($("rpCountdown")._t); $("rpCountdown").textContent="";
+    st.className="small text-muted mt-2"; st.textContent="发射结束"; rpJob=null; });
+};
+
+// ---------- reconnect to a running capture on page load ----------
+(async function reconnectCapture(){
+  const cur = await HRF.currentJob();
+  if(cur && cur.kind==="capture"){
+    capJob=cur.id; $("capFields").disabled=true; setCapBtn(true);
+    $("capStatus").className="small text-success mt-2"; $("capStatus").innerHTML='<i class="bi bi-record-fill text-danger"></i> 已重连到进行中的录制…';
+    const p=(cur.meta&&cur.meta.params)||{};
+    const durSec = (p.n_samples&&p.samp_rate)? p.n_samples/p.samp_rate : 0;
+    capChart.setDuration(durSec);
+    if(durSec>0 && cur.started_at){ startCountdown($("capCountdown"), cur.started_at+durSec); }
+    capEs=HRF.streamJob(capJob, ev=>{ if(ev.kind==="power") capChart.push(ev.dbfs); }, ()=>{
+      $("capFields").disabled=false; setCapBtn(false); stopCountdown($("capCountdown")._t); $("capCountdown").textContent="";
+      $("capStatus").className="small text-muted mt-2"; $("capStatus").textContent="录制结束"; capJob=null; loadCaptures(); });
+  } else if(cur && cur.kind==="replay"){
+    // a transmit is in progress — reopen the modal in transmitting state
+    const m=cur.meta||{}, p=m.params||{};
+    $("rpPath").value=m.path||""; $("rpName").value=(m.path||"").split("/").pop().replace(/\.raw$/,"");
+    $("rpFreq").value=p.freq_hz||""; $("rpSamp").value=p.samp_rate||""; refreshRpCmd();
+    rpJob=cur.id; $("rpFields").disabled=true; setRpBtn(true); rpChart.reset(); rpChart.setDuration(0);
+    $("rpStatus").className="small text-danger mt-2"; $("rpStatus").innerHTML='<i class="bi bi-broadcast"></i> 已重连到进行中的发射…'; $("rpCountdown").textContent="发射中";
+    replayModal=bootstrap.Modal.getOrCreateInstance($("replayModal")); replayModal.show();
+    rpEs=HRF.streamJob(rpJob, ev=>{ if(ev.kind==="power") rpChart.push(ev.dbfs); }, ()=>{
+      $("rpFields").disabled=false; setRpBtn(false); $("rpCountdown").textContent="";
+      $("rpStatus").className="small text-muted mt-2"; $("rpStatus").textContent="发射结束"; rpJob=null; });
+  }
+})();
+loadCaptures();
+</script>
+{% endblock %}

@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+{% block title %}频谱扫描 · HackRF Toolkit{% endblock %}
+{% block content %}
+<h4 class="mb-2"><i class="bi bi-graph-up text-primary"></i> 频谱</h4>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-scan"><i class="bi bi-graph-up"></i> 频谱扫描</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-decode"><i class="bi bi-cpu"></i> 设备解码 (rtl_433)</button></li>
+</ul>
+<div class="tab-content">
+<div class="tab-pane fade show active" id="tab-scan">
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header bg-light"><i class="bi bi-sliders"></i> 扫描参数</div>
+      <div class="card-body">
+        <fieldset id="cfgFields">
+        <label class="form-label small text-muted mb-1">预设频段</label>
+        <div id="bandChips" class="mb-3">
+          {% for b in bands %}
+          <span class="badge bg-light text-dark border band-chip me-1 mb-1"
+                data-low="{{ b.f_low_mhz }}" data-high="{{ b.f_high_mhz }}" title="{{ b.note }}">{{ b.name }}</span>
+          {% endfor %}
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col"><label class="form-label small mb-0">起始 (MHz)</label><input id="fLow" type="number" class="form-control form-control-sm" value="433"></div>
+          <div class="col"><label class="form-label small mb-0">结束 (MHz)</label><input id="fHigh" type="number" class="form-control form-control-sm" value="435"></div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-0">频点分辨率 (kHz) <i class="bi bi-question-circle text-primary help-i" data-help="sweep-bin"></i></label>
+          <select id="binKhz" class="form-select form-select-sm">
+            <option value="100000">100 kHz (快)</option>
+            <option value="50000">50 kHz</option>
+            <option value="25000">25 kHz (细)</option>
+          </select>
+        </div>
+        <div class="form-check form-switch mb-1">
+          <input id="swAdv" class="form-check-input" type="checkbox"><label class="form-check-label small" for="swAdv">高级设置 <i class="bi bi-question-circle text-primary help-i" data-help="sett-advanced"></i></label>
+        </div>
+        <div id="swAdvBox" class="border rounded p-2 mb-1 bg-light d-none">
+          <div class="row g-2">
+            <div class="col"><label class="form-label small mb-0">LNA 0-40 <i class="bi bi-question-circle text-primary help-i" data-help="lna"></i></label><input id="swLna" type="number" class="form-control form-control-sm" value="40" step="8" min="0" max="40"></div>
+            <div class="col"><label class="form-label small mb-0">VGA 0-62 <i class="bi bi-question-circle text-primary help-i" data-help="vga"></i></label><input id="swVga" type="number" class="form-control form-control-sm" value="40" step="2" min="0" max="62"></div>
+          </div>
+          <div class="form-check mt-1"><input id="swAmp" class="form-check-input" type="checkbox"><label class="form-check-label small" for="swAmp">Amp 放大器 <i class="bi bi-question-circle text-primary help-i" data-help="amp"></i></label></div>
+        </div>
+        </fieldset>
+        <label class="form-label small text-muted mb-0 mt-2 d-flex justify-content-between"><span>将执行的命令 <i class="bi bi-question-circle text-primary help-i" data-help="sweep-cmd"></i></span></label>
+        <div class="cmd-box" id="swCmd" style="font-size:.72rem"></div>
+        <div class="d-flex gap-2 mt-2">
+          <button id="btnOnce" class="btn btn-outline-primary btn-sm flex-fill" title="扫一遍就自动停,得到一张快照"><i class="bi bi-1-circle"></i> 单次扫描</button>
+          <button id="btnCont" class="btn btn-primary btn-sm flex-fill" title="连续扫描,再点变停止"><i class="bi bi-broadcast"></i> 连续扫描</button>
+        </div>
+        <hr>
+        <div class="form-check form-switch mb-2">
+          <input id="peakHold" class="form-check-input" type="checkbox" checked>
+          <label class="form-check-label small" for="peakHold">峰值保持 <i class="bi bi-question-circle text-primary help-i" data-help="peak-hold"></i></label>
+          <button id="phReset" class="btn btn-outline-secondary btn-sm py-0 ms-2">清零</button>
+        </div>
+        <label class="form-label small text-muted mb-1 d-flex justify-content-between">
+          <span>纵轴范围 (dBfs) <i class="bi bi-question-circle text-primary help-i" data-help="yaxis-range"></i></span>
+          <span class="form-check form-switch mb-0">
+            <input id="autoDb" class="form-check-input" type="checkbox" checked>
+            <label class="form-check-label small" for="autoDb">自动</label>
+          </span>
+        </label>
+        <div class="row g-2 align-items-center">
+          <div class="col"><input id="minDb" type="number" class="form-control form-control-sm" value="-90" disabled></div>
+          <div class="col-auto">~</div>
+          <div class="col"><input id="maxDb" type="number" class="form-control form-control-sm" value="-20" disabled></div>
+        </div>
+        <div id="scanXlock" class="small text-warning mt-2 d-none"><i class="bi bi-lock"></i> 设备解码运行中,请先在「设备解码」标签停止</div>
+        <div id="status" class="small text-muted mt-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header bg-light d-flex justify-content-between">
+        <span><i class="bi bi-activity"></i> 实时频谱 <i class="bi bi-question-circle text-primary help-i" data-help="spectrum-line"></i>
+          <span class="small text-muted ms-2"><span style="color:#39d353">■</span>实时 <span style="color:#e3b341">■</span>峰值保持</span></span>
+        <span id="peakLabel" class="fs-6 fw-bold text-success"></span>
+      </div>
+      <div class="card-body waterfall-wrap">
+        <canvas class="specline" id="specline" width="900" height="360" style="height:360px"></canvas>
+        <div class="d-flex justify-content-between small text-muted mt-1 px-1" id="freqAxis"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header bg-light"><i class="bi bi-list-ol"></i> 检测到的峰值 <span class="small text-muted">(按强度排序)</span></div>
+      <div class="card-body p-0"><div id="peakList"><div class="text-muted small p-3">开始扫描后显示。</div></div></div>
+    </div>
+  </div>
+</div>
+</div><!-- /tab-scan -->
+
+<div class="tab-pane fade" id="tab-decode">
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header bg-light"><i class="bi bi-cpu"></i> rtl_433 设备解码</div>
+      <div class="card-body">
+        <div class="alert alert-info py-2 small mb-2"><i class="bi bi-info-circle"></i> 直接<b>解码</b>周边 ISM 设备(胎压/气象站/门磁/温湿度…),不是看频谱。与频谱扫描互斥(半双工)。</div>
+        <label class="form-label small text-muted mb-1">预设频段</label>
+        <div id="decChips" class="mb-2">
+          {% for b in bands if b.id in ['car433','car315','ism868'] %}
+          <span class="badge bg-light text-dark border decchip me-1 mb-1" data-hz="{{ b.center_hz }}">{{ b.name }}</span>
+          {% endfor %}
+        </div>
+        <label class="form-label small mb-0">频率 Hz <i class="bi bi-question-circle text-primary help-i" data-help="rtl433"></i></label>
+        <input id="decFreq" type="number" class="form-control form-control-sm mono mb-2" value="433920000">
+        <div class="form-check form-switch mb-1"><input id="decAdv" class="form-check-input" type="checkbox"><label class="form-check-label small" for="decAdv">高级设置 <i class="bi bi-question-circle text-primary help-i" data-help="sett-advanced"></i></label></div>
+        <div id="decAdvBox" class="border rounded p-2 mb-2 bg-light d-none">
+          <label class="form-label small mb-0">采样率 Hz(留空=自动) <i class="bi bi-question-circle text-primary help-i" data-help="samp-rate"></i></label>
+          <input id="decSamp" type="number" class="form-control form-control-sm mono mb-2" placeholder="自动">
+          <label class="form-label small mb-0">rtl_433 额外参数(专家) <i class="bi bi-question-circle text-primary help-i" data-help="rtl433-extra"></i></label>
+          <input id="decExtra" class="form-control form-control-sm mono" placeholder="如 -R 40(只启用协议40)  -A(分析未知脉冲)">
+        </div>
+        <label class="form-label small text-muted mb-0 d-flex justify-content-between">
+          <span>将执行的命令 <i class="bi bi-question-circle text-primary help-i" data-help="rtl433-cmd"></i></span>
+          <span class="form-check form-switch mb-0"><input id="decExpert" class="form-check-input" type="checkbox"><label class="form-check-label small" for="decExpert">专家模式(可手改)</label></span>
+        </label>
+        <textarea id="decCmd" class="cmd-box mb-2" rows="3" readonly></textarea>
+        <button id="decStart" class="btn btn-primary btn-sm w-100"><i class="bi bi-play-fill"></i> 开始解码</button>
+        <div id="decXlock" class="small text-warning mt-2 d-none"><i class="bi bi-lock"></i> 频谱扫描运行中,请先在「频谱扫描」标签停止</div>
+        <div id="decStatus" class="small text-muted mt-2"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header bg-light d-flex justify-content-between">
+        <span><i class="bi bi-list-ul"></i> 解码到的设备 <span id="decCount" class="badge bg-secondary"></span></span>
+        <button class="btn btn-sm btn-outline-secondary py-0" onclick="decClear()">清空</button>
+      </div>
+      <div class="card-body p-0"><div style="max-height:520px;overflow-y:auto">
+        <table class="table table-sm mb-0"><thead class="table-light" style="position:sticky;top:0"><tr><th>时间</th><th>设备</th><th>ID</th><th>数据</th></tr></thead>
+        <tbody id="decTbody"><tr><td colspan="4" class="text-muted small p-3">开始解码后,收到的设备会列在这里。空旷环境可能较久才有信号。</td></tr></tbody></table>
+      </div></div>
+    </div>
+  </div>
+</div>
+</div><!-- /tab-decode -->
+</div><!-- /tab-content -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.HRF_PAGE_KINDS = ["sweep", "rtl433"];
+const $ = id => document.getElementById(id);
+const sl = document.getElementById("specline"), slctx = sl.getContext("2d");
+const NB = 700;
+let es=null, jobId=null, scanning=false;
+let fLow=0, fHigh=0;
+let spec=null, seen=null, hold=null, lastHzLow=1e18, sweepPos=0, lastEventTs=0;
+let curMn=-90, curMx=-20, peaks=[], rafId=null, peakTimer=null;
+
+document.querySelectorAll(".band-chip").forEach(ch => ch.onclick = () => {
+  if(scanning) return;
+  document.getElementById("fLow").value = ch.dataset.low;
+  document.getElementById("fHigh").value = ch.dataset.high;
+  buildSwCmd();
+});
+$("swAdv").onchange = e => $("swAdvBox").classList.toggle("d-none", !e.target.checked);
+function buildSwCmd(){
+  const a=["hackrf_sweep","-f",$("fLow").value+":"+$("fHigh").value,"-w",$("binKhz").value,"-l",$("swLna").value,"-g",$("swVga").value];
+  if($("swAmp").checked) a.push("-a","1");
+  const dev=HRF.getDevice(); if(dev) a.push("-d",dev);
+  $("swCmd").textContent=a.join(" ")+"   (连续模式无 -1;单次加 -1)";
+}
+["fLow","fHigh","binKhz","swLna","swVga","swAmp"].forEach(id=> $(id).addEventListener("input", buildSwCmd));
+document.getElementById("autoDb").onchange = (e) => {
+  document.getElementById("minDb").disabled = e.target.checked;
+  document.getElementById("maxDb").disabled = e.target.checked;
+};
+document.getElementById("phReset").onclick = () => { if(hold) hold.fill(-200); };
+document.getElementById("peakHold").onchange = (e) => { if(e.target.checked && hold) hold.fill(-200); };
+
+function setStatus(m,c){ const s=document.getElementById("status"); s.className="small mt-3 "+(c||"text-muted"); s.innerHTML=m; }
+function resetSpec(){ spec=new Float32Array(NB).fill(-120); seen=new Uint8Array(NB); hold=new Float32Array(NB).fill(-200); sweepPos=0; lastHzLow=1e18; }
+
+function ingest(ev){
+  lastEventTs = performance.now();
+  lastHzLow = ev.hz_low;
+  const span = fHigh - fLow;
+  for(let i=0;i<ev.bins.length;i++){
+    const f = ev.hz_low + i*ev.bin_width;
+    if(f<fLow || f>=fHigh) continue;
+    const b = Math.min(NB-1, Math.floor((f-fLow)/span*NB));
+    spec[b] = ev.bins[i]; seen[b] = 1;
+    if(ev.bins[i] > hold[b]) hold[b] = ev.bins[i];
+    if(b>sweepPos) sweepPos=b;
+  }
+}
+
+function computeRange(){
+  if(document.getElementById("autoDb").checked){
+    const src = document.getElementById("peakHold").checked ? hold : spec;
+    const s = []; for(let i=0;i<NB;i++) if(seen[i]) s.push(src[i]);
+    s.sort((a,b)=>a-b);
+    if(s.length>5){
+      const p5=s[Math.floor(s.length*0.05)], top=s[s.length-1];
+      curMn=Math.floor(p5-3); curMx=Math.ceil(top+5); if(curMx-curMn<15) curMx=curMn+15;
+      document.getElementById("minDb").value=curMn; document.getElementById("maxDb").value=curMx;
+    }
+  } else { curMn=+document.getElementById("minDb").value; curMx=+document.getElementById("maxDb").value; }
+}
+
+function findPeaks(){
+  const src = document.getElementById("peakHold").checked ? hold : spec;
+  let vmax=-999; for(let i=0;i<NB;i++) if(seen[i]&&src[i]>vmax) vmax=src[i];
+  const floor = curMn + (curMx-curMn)*0.4;
+  const cand=[];
+  for(let i=1;i<NB-1;i++){
+    if(!seen[i]) continue;
+    if(src[i]>=src[i-1] && src[i]>=src[i+1] && src[i]>=floor && src[i]>=vmax-20) cand.push({i,v:src[i]});
+  }
+  cand.sort((a,b)=>b.v-a.v);
+  const out=[];
+  for(const c of cand){ if(out.every(o=>Math.abs(o.i-c.i)>NB*0.02)) out.push(c); if(out.length>=8) break; }
+  return out.map(c=>({idx:c.i, db:c.v, hz:fLow+((c.i+0.5)/NB)*(fHigh-fLow)}));
+}
+
+function drawSpec(){
+  const W=sl.width,H=sl.height;
+  slctx.fillStyle="#0b0e14"; slctx.fillRect(0,0,W,H);
+  slctx.strokeStyle="rgba(255,255,255,.07)"; slctx.fillStyle="rgba(255,255,255,.5)"; slctx.font="11px monospace";
+  for(let k=0;k<=5;k++){ const y=H*k/5; slctx.beginPath(); slctx.moveTo(0,y); slctx.lineTo(W,y); slctx.stroke();
+    slctx.fillText(Math.round(curMx-(curMx-curMn)*k/5)+" dBfs",4,Math.min(H-3,y+12)); }
+  // vertical freq gridlines
+  for(let k=1;k<8;k++){ const x=W*k/8; slctx.beginPath(); slctx.moveTo(x,0); slctx.lineTo(x,H); slctx.stroke(); }
+  const yOf=v=>{ let t=(v-curMn)/(curMx-curMn); t=Math.max(0,Math.min(1,t)); return H-t*H; };
+  // peak-hold envelope (drawn first, faint fill)
+  if(document.getElementById("peakHold").checked){
+    slctx.beginPath(); slctx.strokeStyle="rgba(227,179,65,.9)"; slctx.lineWidth=1;
+    for(let x=0;x<W;x++){ const y=yOf(hold[Math.floor(x/W*NB)]); x?slctx.lineTo(x,y):slctx.moveTo(x,y); }
+    slctx.stroke();
+  }
+  // live trace
+  slctx.beginPath(); slctx.moveTo(0,H);
+  for(let x=0;x<W;x++){ slctx.lineTo(x,yOf(spec[Math.floor(x/W*NB)])); }
+  slctx.lineTo(W,H); slctx.closePath(); slctx.fillStyle="rgba(57,211,83,.12)"; slctx.fill();
+  slctx.beginPath(); slctx.strokeStyle="#39d353"; slctx.lineWidth=1.4;
+  for(let x=0;x<W;x++){ const y=yOf(spec[Math.floor(x/W*NB)]); x?slctx.lineTo(x,y):slctx.moveTo(x,y); }
+  slctx.stroke();
+  // sweep head marker
+  if(scanning){ const sx=Math.floor(sweepPos/NB*W);
+    slctx.strokeStyle="rgba(0,200,255,.5)"; slctx.lineWidth=1; slctx.beginPath(); slctx.moveTo(sx,0); slctx.lineTo(sx,H); slctx.stroke(); }
+  // peak markers + labels
+  peaks.forEach(p=>{
+    const px=Math.floor(p.idx/NB*W), py=yOf(p.db);
+    slctx.fillStyle="#ff5050"; slctx.beginPath();
+    slctx.moveTo(px,py-3); slctx.lineTo(px-4,py-11); slctx.lineTo(px+4,py-11); slctx.closePath(); slctx.fill();
+    const lbl=HRF.fmtHz(p.hz); slctx.font="11px monospace";
+    const tw=slctx.measureText(lbl).width, lx=Math.min(W-tw-2,Math.max(2,px-tw/2));
+    slctx.fillStyle="rgba(0,0,0,.65)"; slctx.fillRect(lx-2,py-26,tw+4,13);
+    slctx.fillStyle="#ffd0d0"; slctx.fillText(lbl,lx,py-16);
+  });
+  rafId = requestAnimationFrame(drawSpec);
+}
+
+function updatePeaks(){
+  let any=false; for(let i=0;i<NB;i++){ if(seen[i]){any=true;break;} }
+  if(!any) return;
+  computeRange();
+  peaks = findPeaks();
+  if(peaks.length){ const p=peaks[0];
+    document.getElementById("peakLabel").innerHTML = `▲ 最强 ${HRF.fmtHz(p.hz)} · ${p.db.toFixed(1)} dBfs`; }
+  // peak table
+  const box=document.getElementById("peakList");
+  if(!peaks.length){ box.innerHTML='<div class="text-muted small p-3">未检测到明显峰值。</div>'; return; }
+  box.innerHTML = `<table class="table table-hover mb-0" style="font-size:1.02rem"><thead class="table-light"><tr><th style="width:40px">#</th><th>频率</th><th>强度 (dBfs)</th><th></th></tr></thead><tbody>`+
+    peaks.map((p,i)=>`<tr><td class="text-muted">${i+1}</td><td class="mono fw-bold">${HRF.fmtHz(p.hz)}</td><td class="mono">${p.db.toFixed(1)}</td>`+
+      `<td><button class="btn btn-outline-primary btn-sm py-0" title="用这个频点去抓包" onclick="toCapture(${Math.round(p.hz)})"><i class="bi bi-record-circle"></i> 抓包</button></td></tr>`).join("")+
+    `</tbody></table>`;
+}
+
+function toCapture(hz){ location.href = "/capture?freq="+hz; }
+
+function drawFreqAxis(){
+  const box=document.getElementById("freqAxis"); box.innerHTML="";
+  for(let k=0;k<=4;k++){ const f=fLow+(fHigh-fLow)*k/4; const s=document.createElement("span"); s.textContent=HRF.fmtHz(f); box.appendChild(s); }
+}
+
+setInterval(()=>{ if(scanning && performance.now()-lastEventTs > 3000)
+  setStatus('<i class="bi bi-exclamation-triangle text-warning"></i> 已 3 秒无数据 —— 信号可能停止,可点停止后重开','text-warning'); }, 1000);
+
+function setFieldsDisabled(d){ document.getElementById("cfgFields").disabled=d;
+  document.querySelectorAll(".band-chip").forEach(c=>c.style.pointerEvents=d?"none":"auto"); }
+
+const btnOnce=document.getElementById("btnOnce"), btnCont=document.getElementById("btnCont");
+function setButtons(){
+  if(scanning){
+    btnOnce.disabled=true;
+    btnCont.classList.remove("btn-primary"); btnCont.classList.add("btn-danger");
+    btnCont.innerHTML='<i class="bi bi-stop-fill"></i> 停止扫描';
+  } else {
+    btnOnce.disabled=false;
+    btnCont.classList.add("btn-primary"); btnCont.classList.remove("btn-danger");
+    btnCont.innerHTML='<i class="bi bi-broadcast"></i> 连续扫描';
+  }
+  if(typeof refreshRadioLock==="function") refreshRadioLock();
+}
+btnOnce.onclick = () => { if(!scanning) startScan(true); };
+btnCont.onclick = () => { if(scanning) stopScan(); else startScan(false); };
+
+async function startScan(oneShot){
+  const lowM=+document.getElementById("fLow").value, highM=+document.getElementById("fHigh").value;
+  if(!(highM>lowM)){ setStatus("结束频率必须大于起始频率","text-danger"); return; }
+  const g = await HRF.guardStart("sweep");
+  if(!g.ok){ setStatus(`有『${HRF.kindLabel(g.kind)}』任务正在运行,请到其页面或右上角状态灯停止`,"text-danger"); return; }
+  if(g.restart) await HRF.post("/api/stop",{});   // clear our own stale sweep only
+  fLow=lowM*1e6; fHigh=highM*1e6;
+  resetSpec(); drawFreqAxis(); document.getElementById("peakLabel").textContent=""; peaks=[];
+  const r=await HRF.post("/api/sweep", HRF.withDevice({f_low_mhz:lowM,f_high_mhz:highM,bin_width_hz:+$("binKhz").value,lna:+$("swLna").value,vga:+$("swVga").value,amp:$("swAmp").checked?1:0,one_shot:oneShot}));
+  if(!r.ok){ setStatus("启动失败: "+(r.body.error||r.status),"text-danger"); return; }
+  jobId=r.body.job_id; scanning=true; lastEventTs=performance.now();
+  setButtons(); setFieldsDisabled(true);
+  setStatus(oneShot?'<i class="bi bi-broadcast"></i> 单次扫描中…':'<i class="bi bi-broadcast"></i> 连续扫描中…',"text-success");
+  peakTimer=setInterval(updatePeaks, 400); rafId=requestAnimationFrame(drawSpec);
+  es=HRF.streamJob(jobId, ev=>{ if(ev.kind==="sweep") ingest(ev); }, (ev)=>onStopped(ev));
+}
+async function stopScan(){ if(jobId) await HRF.post("/api/jobs/"+jobId+"/stop",{}); if(es) es.close(); onStopped(); }
+
+function onStopped(ev){
+  scanning=false;
+  if(peakTimer){ clearInterval(peakTimer); peakTimer=null; }
+  if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+  updatePeaks();   // final refresh of peak list
+  setButtons(); setFieldsDisabled(false);
+  const done = ev && ev.state === "done";
+  setStatus(done?'<i class="bi bi-check-circle text-success"></i> 扫描完成':"已停止", done?"text-success":"text-muted"); jobId=null;
+}
+
+buildSwCmd();
+
+// ---------- rtl_433 device decode tab ----------
+let decEs=null, decJob=null, decN=0;
+document.querySelectorAll("#decChips .decchip").forEach(c=>c.onclick=()=>{ $("decFreq").value=c.dataset.hz; buildDecCmd(); });
+$("decAdv").onchange = e => $("decAdvBox").classList.toggle("d-none", !e.target.checked);
+$("decExpert").onchange = e => { $("decCmd").readOnly=!e.target.checked; if(!e.target.checked) buildDecCmd(); $("decCmd").classList.toggle("border-warning", e.target.checked); };
+function decDev(){ const s=HRF.getDevice(); return "driver=hackrf"+(s?(",serial="+s):""); }
+function buildDecCmd(){
+  if($("decExpert").checked) return;
+  const a=["rtl_433","-d",decDev(),"-f",$("decFreq").value,"-F","json"];
+  if($("decSamp").value.trim()) a.push("-s",$("decSamp").value.trim());
+  const ex=$("decExtra").value.trim(); if(ex) a.push(ex);
+  $("decCmd").value=a.join(" ");
+}
+["decFreq","decSamp","decExtra"].forEach(id=> $(id).addEventListener("input", buildDecCmd));
+buildDecCmd();
+function setDecBtn(on){
+  if(on){ $("decStart").innerHTML='<i class="bi bi-stop-fill"></i> 停止解码'; $("decStart").classList.replace("btn-primary","btn-danger"); }
+  else { $("decStart").innerHTML='<i class="bi bi-play-fill"></i> 开始解码'; $("decStart").classList.replace("btn-danger","btn-primary"); }
+  refreshRadioLock();
+}
+function decClear(){ $("decTbody").innerHTML=""; decN=0; $("decCount").textContent=""; }
+function addDecode(ev){
+  if(decN===0) $("decTbody").innerHTML="";
+  decN++; $("decCount").textContent=decN;
+  const d=ev.data||{}, t=new Date().toLocaleTimeString();
+  const skip=new Set(["model","id","time","mic","protocol"]);
+  const kv=Object.keys(d).filter(k=>!skip.has(k)).slice(0,7).map(k=>`${k}=${d[k]}`).join(" · ");
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td class="small mono">${t}</td><td class="small">${ev.model||"?"}</td><td class="mono small">${ev.dev_id??"-"}</td><td class="small mono" style="max-width:340px;overflow:hidden;text-overflow:ellipsis">${kv}</td>`;
+  $("decTbody").insertBefore(tr, $("decTbody").firstChild);
+}
+// scan (sweep) and decode (rtl433) share the radio — lock each other's controls
+function refreshRadioLock(){
+  const decBusy=!!decJob;
+  if(!scanning){ btnOnce.disabled=decBusy; btnCont.disabled=decBusy; }
+  $("scanXlock").classList.toggle("d-none", !decBusy);
+  $("decStart").disabled = scanning && !decJob;
+  $("decXlock").classList.toggle("d-none", !(scanning && !decJob));
+}
+$("decStart").onclick = async () => {
+  if(decJob){ await HRF.post("/api/jobs/"+decJob+"/stop",{}); if(decEs) decEs.close(); return; }
+  const g=await HRF.guardStart("rtl433");
+  if(!g.ok){ $("decStatus").className="small text-warning mt-2"; $("decStatus").innerHTML=`有『${HRF.kindLabel(g.kind)}』任务运行中,请先停止(频谱扫描与解码互斥)`; return; }
+  let r;
+  if($("decExpert").checked){ r=await HRF.post("/api/rtl433", {argv: $("decCmd").value.trim().split(/\s+/)}); }
+  else {
+    const body=HRF.withDevice({freq_hz:+$("decFreq").value});
+    if($("decSamp").value.trim()) body.samp_rate=+$("decSamp").value.trim();
+    const ex=$("decExtra").value.trim(); if(ex) body.extra=ex;
+    r=await HRF.post("/api/rtl433", body);
+  }
+  if(r.status===409){ $("decStatus").className="small text-warning mt-2"; $("decStatus").textContent="RF_Bridge 忙,请到运行中任务的页面或右上角停止"; return; }
+  if(!r.ok){ $("decStatus").className="small text-danger mt-2"; $("decStatus").textContent="启动失败: "+(r.body.error||r.status); return; }
+  decJob=r.body.job_id; setDecBtn(true);
+  $("decStatus").className="small text-success mt-2"; $("decStatus").innerHTML='<i class="bi bi-broadcast"></i> 解码中… '+HRF.fmtHz(+$("decFreq").value);
+  decEs=HRF.streamJob(decJob, ev=>{ if(ev.kind==="decode") addDecode(ev); },
+    ()=>{ setDecBtn(false); $("decStatus").className="small text-muted mt-2"; $("decStatus").textContent="已停止"; decJob=null; refreshRadioLock(); });
+};
+(async function(){ const cur=await HRF.currentJob(); if(cur && cur.kind==="rtl433"){ decJob=cur.id; setDecBtn(true); $("decStatus").className="small text-success mt-2"; $("decStatus").innerHTML='<i class="bi bi-broadcast"></i> 已重连到进行中的解码…'; decEs=HRF.streamJob(decJob, ev=>{ if(ev.kind==="decode") addDecode(ev); }, ()=>{ setDecBtn(false); $("decStatus").textContent="已停止"; decJob=null; }); } })();
+
+// reconnect to a running sweep (sweep now persists across page navigation)
+(async function(){
+  const cur = await HRF.currentJob();
+  if(cur && cur.kind==="sweep" && cur.meta && cur.meta.params){
+    const p=cur.meta.params;
+    $("fLow").value=p.f_low_mhz; $("fHigh").value=p.f_high_mhz;
+    fLow=p.f_low_mhz*1e6; fHigh=p.f_high_mhz*1e6; resetSpec(); drawFreqAxis();
+    jobId=cur.id; scanning=true; lastEventTs=performance.now();
+    setButtons(); setFieldsDisabled(true); setStatus('<i class="bi bi-broadcast"></i> 已重连到进行中的扫描…',"text-success");
+    peakTimer=setInterval(updatePeaks,400); rafId=requestAnimationFrame(drawSpec);
+    es=HRF.streamJob(jobId, ev=>{ if(ev.kind==="sweep") ingest(ev); }, (e)=>onStopped(e));
+  }
+})();
+</script>
+{% endblock %}

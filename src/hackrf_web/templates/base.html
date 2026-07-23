@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}HackRF Toolkit{% endblock %}</title>
+<link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='vendor/bootstrap-icons/font/bootstrap-icons.css') }}" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" style="position:relative;z-index:1030">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="{{ url_for('device') }}">
+      <i class="bi bi-broadcast-pin me-1"></i> HackRF Toolkit
+      <span class="badge bg-primary ms-1" style="font-size:.65rem;vertical-align:middle">v{{ app_version }}</span>
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav ms-auto align-items-lg-center">
+        <li class="nav-item"><a class="nav-link {% if request.path=='/device' %}active{% endif %}" href="{{ url_for('device') }}"><i class="bi bi-cpu"></i> 硬件</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path=='/spectrum' %}active{% endif %}" href="{{ url_for('spectrum') }}"><i class="bi bi-graph-up"></i> 频谱扫描</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path=='/capture' %}active{% endif %}" href="{{ url_for('capture') }}"><i class="bi bi-record-circle"></i> 抓包 / 重放</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path=='/gps' %}active{% endif %}" href="{{ url_for('gps') }}"><i class="bi bi-geo-alt"></i> GPS 模拟</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path=='/help' %}active{% endif %}" href="{{ url_for('help_page') }}"><i class="bi bi-book"></i> 帮助</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path=='/about' %}active{% endif %}" href="{{ url_for('about') }}"><i class="bi bi-info-circle"></i> 关于</a></li>
+        <li class="nav-item ms-lg-3">
+          <span id="bridgeStatus" class="badge rounded-pill bg-secondary" title="RF_Bridge 状态">
+            <span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem"></span> 连接中
+          </span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div id="runBanner" class="alert alert-warning border-0 rounded-0 mb-0 d-none" style="position:sticky;top:0;z-index:400">
+  <div class="container d-flex align-items-center">
+    <span class="spinner-border spinner-border-sm text-warning me-2"></span>
+    <span id="runBannerText" class="small">任务运行中</span>
+  </div>
+</div>
+
+<!-- content lock overlay: shown on pages that don't own the running task -->
+<div id="lockOverlay" class="d-none">
+  <div class="lock-card">
+    <div class="spinner-border text-warning mb-2"></div>
+    <div id="lockText" class="fw-semibold mb-1">有任务正在运行</div>
+    <div class="small text-muted">本页已锁定。请回到该任务所在页面停止,或点右上角状态灯一键停止。</div>
+  </div>
+</div>
+
+<div class="container py-3">
+  {% block content %}{% endblock %}
+</div>
+
+<footer class="text-center text-muted py-4 mt-4">
+  <small>HackRF One 工具包 · 侦察 + 授权重放 · 本地单用户使用 —— RF_Bridge: <code>{{ bridge_url }}</code></small>
+</footer>
+
+<!-- Global inline-help drawer. Any element with data-help="key" opens it. -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="helpDrawer" data-bs-backdrop="false" data-bs-scroll="true" style="width:min(560px,92vw)">
+  <div class="offcanvas-header border-bottom">
+    <h6 class="offcanvas-title mb-0" id="helpDrawerTitle">帮助</h6>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body" id="helpDrawerBody"></div>
+  <div class="border-top p-3 text-end">
+    <a href="{{ url_for('help_page') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-book"></i> 完整帮助中心 →</a>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/htmx/htmx.min.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

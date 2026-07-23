@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+captures/*.raw
+captures/*.meta.json
+*.bin
+logs/
+.session_key

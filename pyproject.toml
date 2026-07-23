@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hackrf_toolkit"
+version = "0.1.0"
+description = "HackRF One Web toolkit — RF_Bridge hardware daemon + Flask web console (capture/replay, spectrum sweep, GPS sim)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "cstriker1407" }]
+
+dependencies = [
+    "flask>=3.0",
+    "waitress>=3.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+rf-bridge = "rf_bridge.__main__:main"

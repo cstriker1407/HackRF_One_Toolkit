@@ -1,0 +1,364 @@
+/* OBD Test ToolKit - Bootstrap override / supplement */
+
+/* 顶部 navbar 上不要留白条: html/body margin 归零, html 底色跟 navbar 保持一致 */
+html, body { margin: 0; padding: 0; }
+html { background-color: #212529; }   /* bootstrap bg-dark 铺满 nav 后无缝 */
+/* body 铺满视口, 避免内容较少时 html 的深色底泄到下面 */
+body { min-height: 100vh; background-color: #f8f9fa; }
+.navbar { margin-top: 0 !important; }
+
+/* Phase 卡片状态色边框 */
+.phase-card {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border-left-width: 5px;
+}
+.phase-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0,0,0,.08) !important;
+}
+.phase-card.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.phase-card.status-completed { border-left-color: var(--bs-success); }
+.phase-card.status-in_progress { border-left-color: var(--bs-warning); }
+.phase-card.status-pending { border-left-color: var(--bs-secondary); }
+
+.phase-id-badge {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: .75rem;
+}
+
+/* dep badge */
+.dep-badge {
+  font-size: .68rem;
+  padding: .18rem .5rem;
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+  white-space: nowrap;
+}
+/* 推荐输入: 虚线边框, 弱化视觉权重 */
+.dep-badge-opt { border: 1px dashed currentColor; }
+
+/* ============ 帮助中心 (/help + offcanvas 抽屉共用) ============ */
+.help-body { line-height: 1.75; color: #1f2937; font-size: 14px; }
+.help-body p { margin: 0 0 10px; }
+.help-body ul, .help-body ol { padding-left: 22px; margin: 6px 0 10px; }
+.help-body li { margin: 4px 0; }
+.help-body code {
+  background: rgba(30,64,175,.08); color: #1e40af;
+  padding: 1px 6px; border-radius: 4px; font-size: .88em;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.help-body table {
+  width: 100%; border-collapse: collapse; margin: 12px 0;
+  font-size: 13px; background: #fff;
+  border-radius: 6px; overflow: hidden;
+  box-shadow: 0 1px 0 rgba(0,0,0,.04);
+}
+.help-body th, .help-body td {
+  padding: 8px 12px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid #e5e7eb;
+}
+.help-body th {
+  background: #f1f5f9; font-weight: 600; color: #334155;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .3px;
+}
+.help-body tr:last-child td { border-bottom: none; }
+
+/* 帮助 section 头 */
+.help-summary {
+  padding: 14px 18px; background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-radius: 10px; border-left: 4px solid #1e40af;
+  margin: 0 0 20px; font-size: 14px; color: #1e293b; line-height: 1.7;
+}
+.help-summary strong { color: #1e40af; }
+
+/* 五种色块 */
+.help-block {
+  margin: 14px 0; padding: 12px 18px 14px; border-radius: 10px;
+  background: #f8fafc; border-left: 4px solid #cbd5e1;
+}
+.help-block .block-title {
+  font-weight: 600; margin-bottom: 6px; font-size: 14px; color: #334155;
+  display: flex; align-items: center; gap: 6px;
+}
+.help-block .block-title .emoji { font-size: 16px; line-height: 1; }
+.help-block .block-body { font-size: 13.5px; }
+
+.help-block.block-what    { border-left-color: #3b82f6; background: #eff6ff; }
+.help-block.block-what .block-title { color: #1e40af; }
+
+.help-block.block-how     { border-left-color: #10b981; background: #ecfdf5; }
+.help-block.block-how .block-title { color: #065f46; }
+
+.help-block.block-concept { border-left-color: #8b5cf6; background: #f5f3ff; }
+.help-block.block-concept .block-title { color: #5b21b6; }
+
+.help-block.block-result  { border-left-color: #f97316; background: #fff7ed; }
+.help-block.block-result .block-title { color: #9a3412; }
+
+.help-block.block-risk    { border-left-color: #dc2626; background: #fef2f2; }
+.help-block.block-risk .block-title { color: #991b1b; }
+
+.help-block.block-related { border-left-color: #6b7280; background: #f9fafb; }
+.help-block.block-related .block-title { color: #4b5563; }
+
+/* offcanvas 里的 h6 (旧 CSS 覆盖) */
+#helpOffcanvas .help-body h6 { color: unset; text-transform: none;
+                               font-size: 14px; letter-spacing: 0; }
+
+/* phase 卡片 IO 区域 - 左侧固定宽度标签 + 右侧 wrap badges */
+.phase-io { font-size: .78rem; }
+.phase-io-label {
+  color: #6c757d;
+  flex-shrink: 0;
+  min-width: 3rem;
+  padding-top: .18rem;
+  font-size: .72rem;
+}
+
+/* JSON 预览框 */
+.json-preview {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  padding: 1rem;
+  font-size: .8rem;
+  overflow: auto;
+  max-height: 300px;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+/* 表格内的内联表单输入框 */
+.tbl-row td input[type="text"],
+.tbl-row td input[type="number"],
+.tbl-row td select {
+  padding: .25rem .5rem;
+  font-size: .85rem;
+}
+
+/* 已识别信息汇总 — 小统计卡片 */
+.stat-card {
+  transition: transform .12s, box-shadow .12s, background .12s;
+  background: #fff;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.08) !important;
+  background: #f8fbff;
+}
+
+/* 诊断服务矩阵 - per-ECU 紧凑 chip 视图 */
+.sid-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .15rem .45rem;
+  margin: .1rem;
+  font-size: .72rem;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  border-radius: .25rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.sid-chip.pos   { background: #d1e7dd; color: #0a3622; border-color: #a3cfbb; font-weight: 600; }
+.sid-chip.nrc   { background: #fff3cd; color: #664d03; border-color: #ffe69c; }
+.sid-chip.nrc7f { background: #cfe2ff; color: #052c65; border-color: #9ec5fe; }   /* 当前 session 拒, 别的 session 可能行 */
+.sid-chip.tout  { background: #e2e3e5; color: #41464b; border-color: #c4c8cc; }
+.sid-chip code { background: transparent; padding: 0; color: inherit; font-size: inherit; }
+.sid-chip .res { opacity: .7; font-size: .65rem; }
+
+.ecu-card-head {
+  background: #f8fafc;
+  border-bottom: 1px solid #e9ecef;
+  padding: .5rem .75rem;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: .85rem;
+  font-weight: 600;
+}
+.ecu-card-head .badge { font-family: var(--bs-body-font-family); }
+
+/* ECU 锚点跳转条 - 每个 tab 顶部, 点 chip 直跳对应 ECU 卡 */
+.ecu-jump-row {
+  background: #f8fafc;
+  border: 1px solid #e9ecef;
+  border-radius: .5rem;
+  padding: .5rem .75rem;
+}
+.ecu-jump-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .15rem .55rem;
+  font-size: .72rem;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 1rem;
+  color: #1e293b;
+  text-decoration: none;
+  transition: background .12s, border-color .12s, transform .12s;
+}
+.ecu-jump-btn:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+  color: #1e3a8a;
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.ecu-jump-btn .ecu-jump-name {
+  font-family: var(--bs-body-font-family);
+  font-size: .68rem;
+  color: #64748b;
+  margin-left: .25rem;
+}
+.ecu-jump-btn:hover .ecu-jump-name { color: #1e3a8a; }
+
+/* 平滑滚动到锚点 */
+html { scroll-behavior: smooth; scroll-padding-top: 1rem; }
+
+/* phase 输入卡片的每行 */
+.input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .55rem .65rem;
+  border-radius: .375rem;
+  margin-bottom: .25rem;
+  background: #fff;
+  border: 1px solid transparent;
+  transition: background .12s, border-color .12s;
+}
+.input-row:hover { background: #f8fbff; }
+.input-row-missing { background: #fffbeb; border-color: #ffe69c; }
+.input-row-soft    { background: #f8f9fa; border-color: #e9ecef; }
+.input-row-soft .fw-semibold { color: #6c757d; }
+
+/* 状态点 */
+.dot {
+  display: inline-block;
+  width: .55rem;
+  height: .55rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-ok   { background: #198754; box-shadow: 0 0 0 .15rem rgba(25,135,84,.18); }
+.dot-bad  { background: #dc3545; box-shadow: 0 0 0 .15rem rgba(220,53,69,.18); }
+.dot-soft { background: #adb5bd; box-shadow: 0 0 0 .15rem rgba(173,181,189,.18); }
+
+/* phase 输出卡片每行 */
+.output-row {
+  padding: .55rem .75rem;
+  border-radius: .375rem;
+  margin-bottom: .25rem;
+  background: #fff;
+  border: 1px solid transparent;
+  transition: background .12s, border-color .12s;
+}
+.output-row:hover { background: #f8fbff; }
+.output-row-empty { background: #f8f9fa; border-color: #e9ecef; }
+.output-row-empty .fw-semibold { color: #6c757d; }
+
+/* ============ Authentication SID 0x29 卡片 ============ */
+.auth-block {
+  border-left: 4px solid #f59e0b;
+}
+.auth-block .auth-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: 0 2px 6px rgba(245,158,11,.25);
+}
+
+/* ============ phase 详情页 头部卡片 ============ */
+.phase-header {
+  border-left: 4px solid #94a3b8;
+  transition: border-color .2s;
+}
+.phase-header.status-completed   { border-left-color: #10b981; }
+.phase-header.status-in_progress { border-left-color: #f59e0b; }
+.phase-header.status-locked      { border-left-color: #cbd5e1; }
+.phase-header.status-pending     { border-left-color: #64748b; }
+
+/* 阶段号大徽章 */
+.phase-num-block {
+  min-width: 72px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  color: #fff;
+  border-radius: 10px;
+  text-align: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(30,58,138,.25);
+}
+.phase-header.status-completed .phase-num-block {
+  background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+  box-shadow: 0 2px 6px rgba(4,120,87,.25);
+}
+.phase-header.status-locked .phase-num-block {
+  background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
+  box-shadow: 0 2px 6px rgba(100,116,139,.2);
+}
+.phase-num-label {
+  font-size: .62rem;
+  letter-spacing: 2px;
+  opacity: .85;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.phase-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.05;
+  margin-top: 2px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+/* 状态胶囊 */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 100px;
+  font-size: .85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.status-pill-completed   { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+.status-pill-in_progress { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.status-pill-locked      { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+.status-pill-pending     { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
+.phase-header .phase-meta code {
+  background: #f1f5f9;
+  color: #1e40af;
+  font-size: .78rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.phase-header .phase-meta-sep { color: #cbd5e1; }
+
+/* 输出卡的操作按钮 - 强制统一尺寸和对齐, 避免 form 默认 margin 造成的位移 */
+.output-actions form { margin: 0 !important; padding: 0 !important; line-height: 1; }
+.output-actions .output-btn {
+  min-width: 76px;
+  height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
+  font-size: .8rem;
+}

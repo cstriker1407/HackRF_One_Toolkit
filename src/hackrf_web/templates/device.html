@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}硬件 · HackRF Toolkit{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-cpu text-primary"></i> 硬件设备
+    <i class="bi bi-question-circle text-primary help-i" data-help="device-select"></i></h4>
+  <button class="btn btn-sm btn-outline-primary" onclick="loadDevice()"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
+</div>
+
+<div id="devArea">
+  <div class="text-center text-muted py-5"><div class="spinner-border"></div><div class="mt-2">正在读取设备…</div></div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header bg-light"><i class="bi bi-tools"></i> RF_Bridge 工具链</div>
+  <div class="card-body" id="toolsArea"><div class="text-muted small">加载中…</div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function devCard(d, active) {
+  const clone = d.is_clone ? `<div class="alert alert-warning py-1 px-2 small mb-2"><i class="bi bi-exclamation-triangle"></i> 非原厂(克隆板),时钟精度可能偏差</div>` : "";
+  const isActive = active === d.serial;
+  return `<div class="card ${isActive?'border-success':''} mb-2">
+    <div class="card-body">
+      <div class="d-flex align-items-start">
+        <span class="display-6 me-3">📡</span>
+        <div class="flex-grow-1">
+          <div class="d-flex justify-content-between">
+            <h6 class="mb-1">HackRF One <span class="badge bg-secondary ms-1">#${d.index}</span>
+              ${isActive?'<span class="badge bg-success ms-1">当前使用</span>':''}</h6>
+            ${!isActive?`<button class="btn btn-sm btn-outline-success py-0" onclick="pick('${d.serial}')">设为当前</button>`:''}
+          </div>
+          ${clone}
+          <table class="table table-sm mb-0"><tbody>
+            <tr><th style="width:120px">序列号</th><td class="mono small">${d.serial||"-"}</td></tr>
+            <tr><th>固件</th><td class="mono small">${d.firmware||"-"}</td></tr>
+            <tr><th>硬件版本</th><td class="mono small">${d.hw_rev||"-"}</td></tr>
+            <tr><th>Board</th><td class="mono small">${d.board_id||"-"}</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+    </div></div>`;
+}
+
+async function loadDevice() {
+  const area = document.getElementById("devArea");
+  area.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border"></div></div>';
+  try {
+    const d = await (await fetch("/api/device")).json();
+    if (!d.present || !(d.devices||[]).length) {
+      area.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-octagon"></i> 未检测到 HackRF。${d.error?'<div class="small mono mt-1">'+d.error+'</div>':''}</div>`;
+      HRF.setDevice(null); return;
+    }
+    // if stored device no longer present, clear it
+    let active = HRF.getDevice();
+    if (active && !d.devices.some(x=>x.serial===active)) { HRF.setDevice(null); active=null; }
+    // single device: auto-bind so -d is always explicit
+    if (d.devices.length === 1) { HRF.setDevice(d.devices[0].serial); active = d.devices[0].serial; }
+
+    let head = "";
+    if (d.count > 1) head = `<div class="alert alert-info py-2"><i class="bi bi-hdd-stack"></i> 检测到 <b>${d.count}</b> 台 HackRF。点"设为当前"选择本工具使用哪一台(扫描/抓包/重放都会用它)。同一时刻仍只能跑一个任务(半双工)。</div>`;
+    else head = `<div class="text-muted small mb-2">检测到 1 台设备,已自动选用。</div>`;
+    area.innerHTML = head + d.devices.map(x=>devCard(x, active)).join("");
+  } catch (e) {
+    area.innerHTML = `<div class="alert alert-danger">读取失败: ${e.message}</div>`;
+  }
+}
+function pick(serial){ HRF.setDevice(serial); loadDevice(); }
+
+async function loadTools() {
+  try {
+    const j = await (await fetch("/api/tools")).json();
+    const t = j.tools || {};
+    const rows = [
+      ["hackrf_info", "查询设备信息"],
+      ["hackrf_transfer", "抓包 / 重放"],
+      ["hackrf_sweep", "频谱扫频"],
+      ["gps-sdr-sim", "GPS 信号合成"],
+      ["rtl_433", "ISM 设备解码(433/315M 传感器等)"],
+    ];
+    document.getElementById("toolsArea").innerHTML =
+      `<table class="table table-sm mb-0"><tbody>` +
+      rows.map(([k, desc]) => {
+        const info = t[k] || {present:false};
+        const badge = info.present
+          ? `<span class="badge bg-success">已安装</span> <span class="mono small text-muted">${info.version||""}</span>`
+          : `<span class="badge bg-secondary">未安装</span>`;
+        return `<tr><td class="mono" style="width:180px">${k}</td><td class="small text-muted">${desc}</td><td class="text-end">${badge}</td></tr>`;
+      }).join("") + `</tbody></table>`;
+  } catch (e) { document.getElementById("toolsArea").innerHTML = `<span class="text-danger small">无法连接 RF_Bridge</span>`; }
+}
+loadDevice(); loadTools();
+</script>
+{% endblock %}
