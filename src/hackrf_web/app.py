@@ -15,7 +15,7 @@ from flask import (Flask, render_template, request, jsonify, redirect,
 from .bridge_client import BridgeClient
 
 HERE = Path(__file__).resolve().parent
-APP_VERSION = "0.4.5"
+APP_VERSION = "0.4.6"
 
 # --- Presets ---------------------------------------------------------------
 # Band presets for the spectrum scanner (quick recon of common bands).
@@ -62,6 +62,11 @@ FEATURES = [
 ]
 
 CHANGELOG = [
+    {"version": "0.4.6", "date": "2026-07-23", "highlights": [
+        "🐛 GPS 单坐标改为『连续发一次』而非循环短文件 —— 循环会把 GPS 时间每 N 秒重置回起点导致接收机永远锁不上;单点连续发射时间才连续,接收机方能锁定(建议停留 ≥120s)",
+        "GPS 多坐标循环标注为实验性(每段重置时间+切换间隙,通常无法锁定;平滑移动需轨迹文件,待实现)",
+        "GPS 页据坐标数给出提示(单点建议长停留 / 多点实验性)",
+    ]},
     {"version": "0.4.5", "date": "2026-07-23", "highlights": [
         "重放弹窗发射时不可关闭(X/背景/ESC 均拦截),须先停止;离开页面后返回可重连到进行中的发射",
         "设备解码新增高级设置(采样率)+ 专家模式(rtl_433 额外参数 / 可手改命令)+ 命令预览",

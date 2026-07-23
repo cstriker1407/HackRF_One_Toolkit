@@ -208,7 +208,35 @@ def run_sequence(job, waypoints: List[Dict[str, Any]], eph: Path, gps_dir: Path,
             raise RuntimeError(f"生成第 {i+1} 个坐标失败: {err}")
         bins.append((out, wp))
 
-    job.emit("info", msg=f"生成完成,开始循环发射(L1 {freq/1e6:.3f} MHz, TX 增益 {txgain})…")
+    def _tx_argv(b):
+        argv = ["hackrf_transfer", "-t", str(b), "-f", str(int(freq)),
+                "-s", str(int(samp)), "-x", str(int(txgain)),
+                "-a", "1" if amp else "0"]
+        if bias_tee:
+            argv += ["-p", "1"]
+        if serial:
+            argv += ["-d", str(serial)]
+        return argv
+
+    # SINGLE static point → transmit ONCE, continuously. Looping a file would
+    # reset the encoded GPS time back to the start every dwell seconds, so the
+    # receiver can never lock. One long continuous file (dwell = hold time) is
+    # what lets a receiver acquire and report the spoofed position.
+    if len(bins) == 1:
+        b, wp = bins[0]
+        job.emit("info", msg=f"单点静态发射:{wp['lat']:.5f}, {wp['lon']:.5f} · "
+                             f"连续 {wp['dwell']}s(不循环,GPS 时间连续)。L1 {freq/1e6:.3f} MHz, TX {txgain}")
+        job.emit("gps_wp", index=0, lat=wp["lat"], lon=wp["lon"], loop=1, dwell=wp["dwell"])
+        _run_child(job, _tx_argv(b))
+        job.emit("info", msg="发射结束(单点)。若接收机未锁定:延长停留(≥120s)、进屏蔽箱、用当天星历、调高 TX 增益。")
+        return
+
+    # MULTIPLE waypoints → loop. NOTE this is experimental: each file resets GPS
+    # time to its start and there's a gap between files, so most receivers will
+    # NOT hold a lock across the jumps. Smooth movement needs a single continuous
+    # trajectory file (gps-sdr-sim -x motion file) — not yet implemented.
+    job.emit("info", msg="⚠ 多坐标循环为实验性:每段文件会把 GPS 时间重置回起点、切换间有间隙,"
+                         "接收机通常无法锁定。建议先用单坐标(长停留)验证锁定。")
     loop = 0
     while not job.stop_event.is_set():
         loop += 1
@@ -219,12 +247,5 @@ def run_sequence(job, waypoints: List[Dict[str, Any]], eph: Path, gps_dir: Path,
                      loop=loop, dwell=wp["dwell"])
             job.emit("info", msg=f"[第 {loop} 轮] 发射坐标 {i+1}: "
                                  f"{wp['lat']:.5f}, {wp['lon']:.5f} · {wp['dwell']}s")
-            argv = ["hackrf_transfer", "-t", str(b), "-f", str(int(freq)),
-                    "-s", str(int(samp)), "-x", str(int(txgain)),
-                    "-a", "1" if amp else "0"]
-            if bias_tee:
-                argv += ["-p", "1"]
-            if serial:
-                argv += ["-d", str(serial)]
-            _run_child(job, argv)
+            _run_child(job, _tx_argv(b))
     job.emit("info", msg="GPS 发射已停止")

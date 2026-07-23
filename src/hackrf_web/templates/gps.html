@@ -68,9 +68,10 @@
         <label class="form-label small text-muted mb-0 d-flex justify-content-between"><span>将执行的命令(示意) <i class="bi bi-question-circle text-primary help-i" data-help="gps-cmd"></i></span></label>
         <div class="cmd-box mb-2" id="gpsCmd" style="font-size:.7rem"></div>
         <div class="d-flex gap-2">
-          <button id="gpsStart" class="btn btn-danger btn-sm flex-fill"><i class="bi bi-broadcast"></i> 生成并循环发射</button>
+          <button id="gpsStart" class="btn btn-danger btn-sm flex-fill"><i class="bi bi-broadcast"></i> 生成并发射</button>
           <button id="gpsStop" class="btn btn-outline-secondary btn-sm flex-fill" disabled><i class="bi bi-stop-fill"></i> 停止</button>
         </div>
+        <div id="gpsHint" class="small text-muted mt-2"></div>
         <div id="gpsStatus" class="small text-muted mt-2"></div>
       </div>
     </div>
@@ -91,7 +92,7 @@
 window.HRF_PAGE_KIND = "gps";
 const $ = id => document.getElementById(id);
 let waypoints = [];   // {lat, lon, alt, dwell, marker}  (lat/lon in WGS-84)
-let poly = null, es=null, gpsJob=null, gpsRunning=false;
+let poly = null, es=null, gpsJob=null, gpsRunning=false, gpsCountTimer=null;
 
 // --- GCJ-02 (高德) <-> WGS-84 conversion ---
 function outOfChina(lat,lon){ return (lon<72.004||lon>137.8347)||(lat<0.8293||lat>55.8271); }
@@ -122,7 +123,7 @@ map.on("click", e => {
 function addWp(lat, lon, shown, alt, dwell){
   const m = L.circleMarker(shown||[lat,lon], {radius:11, color:"#dc3545", fillColor:"#dc3545", fillOpacity:.85, weight:2})
     .addTo(map).bindTooltip(String(waypoints.length+1), {permanent:true, direction:"center", className:"wp-tip"});
-  waypoints.push({lat, lon, alt:alt!=null?alt:20, dwell:dwell!=null?dwell:10, marker:m});
+  waypoints.push({lat, lon, alt:alt!=null?alt:20, dwell:dwell!=null?dwell:120, marker:m});
   redraw(); saveWps();
 }
 function updWp(i,key,val){ waypoints[i][key]=+val; saveWps(); }
@@ -137,6 +138,11 @@ function redraw(){
   if(poly){ map.removeLayer(poly); poly=null; }
   if(waypoints.length>1) poly = L.polyline(waypoints.map(w=>w.marker.getLatLng()), {color:"#dc3545", weight:2, dashArray:"5,6"}).addTo(map);
   $("wpCount").textContent = waypoints.length||"";
+  const gh=$("gpsHint");
+  if(gh){
+    if(waypoints.length>1){ gh.className="small text-warning mt-2"; gh.innerHTML='<i class="bi bi-exclamation-triangle"></i> 多坐标循环为<b>实验性</b>,接收机通常无法锁定;建议先用单坐标验证。'; }
+    else { gh.textContent=""; }
+  }
   const box=$("wpList");
   if(!waypoints.length){ box.innerHTML='<div class="text-muted small p-3">点地图添加坐标。</div>'; return; }
   box.innerHTML = `<table class="table table-sm mb-0 align-middle"><thead class="table-light" style="position:sticky;top:0"><tr><th>#</th><th>纬度</th><th>经度</th><th>海拔</th><th>停留</th><th></th></tr></thead><tbody>`+
@@ -144,8 +150,8 @@ function redraw(){
       <td>${i+1}</td>
       <td class="mono small">${w.lat.toFixed(5)}</td>
       <td class="mono small">${w.lon.toFixed(5)}</td>
-      <td><input type="number" class="form-control form-control-sm py-0" style="width:66px" value="${w.alt}" ${gpsRunning?'disabled':''} onchange="updWp(${i},'alt',this.value)"></td>
-      <td><input type="number" class="form-control form-control-sm py-0" style="width:58px" value="${w.dwell}" min="1" ${gpsRunning?'disabled':''} onchange="updWp(${i},'dwell',this.value)"></td>
+      <td><input type="number" class="form-control form-control-sm py-0" style="width:96px" value="${w.alt}" ${gpsRunning?'disabled':''} onchange="updWp(${i},'alt',this.value)"></td>
+      <td><input type="number" class="form-control form-control-sm py-0" style="width:96px" value="${w.dwell}" min="1" ${gpsRunning?'disabled':''} onchange="updWp(${i},'dwell',this.value)"></td>
       <td>${gpsRunning?'':`<button class="btn btn-outline-secondary btn-sm py-0" onclick="delWp(${i})"><i class="bi bi-trash"></i></button>`}</td></tr>`).join("")+
     `</tbody></table>`;
 }
@@ -189,7 +195,7 @@ function buildGpsCmd(){
   const dev=HRF.getDevice()?(" -d "+HRF.getDevice()):"";
   const gen=`gps-sdr-sim -e ephemeris.nav -l <纬度>,<经度>,<海拔> -d <停留s> -s ${samp} -b 8${extra?" "+extra:""} -o wpN.bin`;
   const txc=`hackrf_transfer -t wpN.bin -f ${freq} -s ${samp} -x ${tx}${amp}${bias}${dev}`;
-  $("gpsCmd").textContent="① 逐坐标生成:\n"+gen+"\n② 循环发射:\n"+txc;
+  $("gpsCmd").textContent="① 逐坐标生成:\n"+gen+"\n② 发射(单点=连续发一次;多点=循环):\n"+txc;
 }
 ["gpsFreq","gpsSamp","gpsTx","gpsExtra","gpsAmp","gpsBias"].forEach(id=> $(id).addEventListener("input", buildGpsCmd));
 
@@ -218,17 +224,30 @@ function setGpsRunning(on){
   ["gpsFreq","gpsSamp","gpsExtra","gpsBias","gpsAmp","gpsTx","gpsAdv"].forEach(id=>{ const el=$(id); if(el) el.disabled=on; });
   $("gpsStart").disabled=on; $("gpsStop").disabled=!on;
 }
+function clearGpsCount(){ if(gpsCountTimer){ clearInterval(gpsCountTimer); gpsCountTimer=null; } }
+function startTxCountdown(index, loop, dwell){
+  clearGpsCount();
+  const end = Date.now()/1000 + dwell;
+  const tick = () => {
+    const r = Math.max(0, end - Date.now()/1000);
+    const head = (loop>1||waypoints.length>1) ? `第 ${loop} 轮 · 坐标 ${index+1} · ` : "";
+    $("gpsStatus").innerHTML = `📡 <b>步骤 2/2 · 发射中</b> · ${head}剩余 <b>${r.toFixed(0)}s</b> / 共 ${dwell}s`;
+    if(r<=0){ clearGpsCount(); $("gpsStatus").innerHTML='📡 <b>步骤 2/2 · 发射中</b>…'; }
+  };
+  tick(); gpsCountTimer=setInterval(tick, 500);
+}
 function attachGps(jid){
   gpsJob=jid; setGpsRunning(true);
-  $("gpsStatus").className="small text-danger mt-2"; $("gpsStatus").innerHTML='<i class="bi bi-broadcast"></i> 发射中…';
+  $("gpsStatus").className="small text-danger mt-2";
+  $("gpsStatus").innerHTML='<span class="spinner-border spinner-border-sm"></span> ⏳ <b>步骤 1/2 · 正在生成信号</b>…(停留越长越久,请稍候)';
   es=HRF.streamJob(gpsJob, ev=>{
     if(ev.kind==="info") log(ev.msg);
-    else if(ev.kind==="gps_wp"){ highlight(ev.index); rowHighlight(ev.index); $("gpsStatus").innerHTML=`<i class="bi bi-broadcast"></i> 第 ${ev.loop} 轮 · 坐标 ${ev.index+1}`; }
-  }, ()=>{ setGpsRunning(false); $("gpsStatus").className="small text-muted mt-2"; $("gpsStatus").textContent="已停止"; highlight(-1); rowHighlight(-1); gpsJob=null; log("■ 发射已结束"); });
+    else if(ev.kind==="gps_wp"){ highlight(ev.index); rowHighlight(ev.index); startTxCountdown(ev.index, ev.loop, ev.dwell); }
+  }, ()=>{ clearGpsCount(); setGpsRunning(false); $("gpsStatus").className="small text-muted mt-2"; $("gpsStatus").textContent="已停止"; highlight(-1); rowHighlight(-1); gpsJob=null; log("■ 发射已结束"); });
 }
 $("gpsStop").onclick = async () => {
   if(!gpsJob) return;
-  $("gpsStop").disabled=true; log("⏹ 正在停止…请稍候");
+  $("gpsStop").disabled=true; clearGpsCount(); log("⏹ 正在停止…请稍候");
   $("gpsStatus").className="small text-warning mt-2"; $("gpsStatus").innerHTML='<span class="spinner-border spinner-border-sm"></span> 正在停止…';
   try{ await HRF.post("/api/jobs/"+gpsJob+"/stop",{}); }catch(e){}
   // stop may take a moment to kill the child process — wait until the bridge is idle
