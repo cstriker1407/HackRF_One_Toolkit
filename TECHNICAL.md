@@ -107,7 +107,9 @@ capture / replay / rtl433 / gps 都是这套的变体:换 argv、换解析器 em
 - `fetch_ephemeris`:从 IGS BKG 镜像下载当天 **RINEX3 混合星历**(`BRDC00WRD_R_{YYYY}{DDD}0000_01D_MN.rnx.gz`),试今天+昨天+CDDIS 兜底,gunzip 存为 `ephemeris.nav`(gps-sdr-sim 能直接读 RINEX3 MN)。**能否成功取决于当天文件是否已发布 + 网络**。
 - `_generate_killable`:生成阶段的 Popen(登记 `job.child`、轮询 `stop_event`、stdout/stderr→DEVNULL 防管道堵)。
 - `_run_child`:发射阶段的 hackrf_transfer(登记 child、pump stderr 出 `power`、轮询 stop)。
-- `run_sequence`:生成所有 bin(可中止)→ 无限循环逐点发射,emit `gps_wp`(地图/表格高亮)与 `info`(日志)。
+- `run_sequence`:先生成所有 bin(可中止),再按坐标数分两种发射:
+  - **单坐标**:生成一个 = 停留时长的连续文件,**只发一次**(不循环)。因为重播同一文件会把编码的 GPS 时间跳回起点,接收机永远锁不上;单点连续发射时间才连续,receiver 方能锁定。emit `gps_wp`(loop=1)。
+  - **多坐标**:循环逐点发射,emit `gps_wp`(地图/表格高亮)。**实验性**:每段文件重置 GPS 时间 + 切换间隙,接收机通常无法锁定;真正平滑移动需 gps-sdr-sim `-x` 轨迹文件生成单个连续文件(未实现)。
 - `generate_bin`:**死代码**,已被 `_generate_killable` 取代,可删。
 
 安全:`extra_gen`(专家额外参数)在 app.py 校验禁 shell 特殊字符;lat/lon/alt 强转 float。
@@ -192,7 +194,7 @@ capture / replay / rtl433 / gps 都是这套的变体:换 argv、换解析器 em
 - **device**:多设备列表 + "设为当前";工具链版本表。
 - **spectrum**:两标签。① 频谱扫描:连续/单次 → `sweep` 事件 → 打印机式实时频谱(青线=扫描位置)+ 峰值保持 + 最多 8 峰 + 峰值列表(点"抓包"跳 `/capture?freq=`);纵轴自动/手动;高级(LNA/VGA/Amp)+ 命令预览。② 设备解码:`rtl_433 -F json` → `decode` 事件 → 设备表;高级(采样率)+ 专家(额外参数/可改命令)。
 - **capture**:录制(标准/高级/专家 + 命令预览)→ `power` → PowerChart(真实时长)+ 倒计时;开始键兼作停止。抓包库(可滚动):重放/下载/删除。重放弹窗:参数回填、采样率锁定;**发射时弹窗不可关**(`hide.bs.modal` 拦截),命令可专家改,有倒计时。
-- **gps**:Leaflet 地图(高德/OSM,高德做 GCJ-02→WGS-84 纠偏)点坐标 → 坐标表 → 生成并循环发射;发射时锁地图/表、当前坐标高亮;星历自动获取/上传;运行日志。
+- **gps**:Leaflet 地图(高德/OSM,高德做 GCJ-02→WGS-84 纠偏)点坐标 → 坐标表 → 生成并发射(单点连续一次 / 多点循环实验性);发射时锁地图/表、当前坐标高亮、状态栏分「步骤1/2 生成中」「步骤2/2 发射中 + 倒计时」;星历自动获取/上传;运行日志。
 - **help**:10 节 SDR/射频技术手册。**about**:`APP_VERSION` + `CHANGELOG` + 作者/背景/特性。
 
 ---
